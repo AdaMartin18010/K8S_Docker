@@ -6,11 +6,9 @@
 
 ## 本章内容
 
-1. [Kubernetes 架构原理](./control-plane.md)
-2. [数据平面组件](./data-plane.md)
-3. [核心对象模型](./object-model.md)
-4. [控制器模式](./controller-pattern.md)
-5. [CRI/CNI/CSI 接口](./cri-cni-csi.md)
+1. [K8s 架构原理](./README.md)
+2. [K8s 1.33 新特性](../whats-new-1.33.md)
+3. [高级调度](../08-advanced-scheduling/)
 
 ---
 

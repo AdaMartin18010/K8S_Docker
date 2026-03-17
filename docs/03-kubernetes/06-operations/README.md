@@ -6,11 +6,9 @@
 
 ## 本章内容
 
-1. [日常运维](./daily-operations.md)
-2. [故障排查](./troubleshooting.md)
-3. [性能调优](./performance-tuning.md)
-4. [备份与恢复](./backup-restore.md)
-5. [升级策略](./upgrade-strategy.md)
+1. [运维概述](./README.md)
+2. [性能调优](./performance-tuning.md)
+3. [故障排查](./troubleshooting.md)
 
 ---
 

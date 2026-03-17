@@ -159,7 +159,7 @@ kubectl expose deployment myapp --type=LoadBalancer --port=8080
 minikube service myapp
 ```
 
-**下一步**: 学习 [Helm](../05-tools/helm/README.md) 和 [GitOps](../04-ecosystem/gitops/README.md)
+**下一步**: 学习 [Helm](../05-tools/) 和 [GitOps](../04-ecosystem/gitops/README.md)
 
 ---
 
@@ -255,7 +255,7 @@ kubectl run -it --rm debug --image=nicolaka/netshoot --restart=Never -- sh
 
 **故障排查流程图**: [故障排查指南](../06-practices/debugging-guide.md)
 
-**下一步**: 学习 [监控告警](../05-tools/observability/README.md) 和 [备份恢复](../06-storage/velero/README.md)
+**下一步**: 学习 [监控告警](../05-tools/observability/) 和 [备份恢复](../06-storage/velero/README.md)
 
 ---
 
@@ -334,9 +334,9 @@ kubectl run -it --rm debug --image=nicolaka/netshoot --restart=Never -- sh
 │  └── [可观测性指南](../05-tools/observability/opentelemetry.md)             │
 │                                                                              │
 │  💻 动手实验                                                                 │
-│  ├── [部署微服务应用](../examples/microservices-demo/)                       │
-│  ├── [配置 CI/CD 流水线](../examples/ci-cd/)                                 │
-│  └── [混沌工程实验](../examples/chaos-mesh/)                                 │
+│  ├── [部署微服务应用](../../examples/microservices-demo/)                       │
+│  ├── [配置 CI/CD 流水线](../../examples/ci-cd/)                                 │
+│  └── [混沌工程实验](../../examples/chaos-mesh/)                                 │
 │                                                                              │
 │  🎓 认证准备                                                                 │
 │  ├── CKA (K8s 管理员)                                                        │

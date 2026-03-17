@@ -7,10 +7,8 @@
 ## 本章内容
 
 1. [Docker 架构](./docker-architecture.md)
-2. [镜像与容器](./images-and-containers.md)
-3. [Docker 网络](./docker-networking.md)
-4. [Docker 存储](./docker-storage.md)
-5. [Docker API](./docker-api.md)
+2. [Docker 网络](./networking.md)
+3. [Docker 存储](./storage.md)
 
 ---
 

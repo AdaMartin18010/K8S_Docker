@@ -6,11 +6,9 @@
 
 ## 本章内容
 
-1. [Pod 深入理解](./pods-deep-dive.md)
-2. [Deployment 部署](./deployments.md)
-3. [StatefulSet 有状态应用](./statefulsets.md)
-4. [DaemonSet 守护进程](./daemonsets.md)
-5. [Job & CronJob 批处理](./jobs.md)
+1. [Pod 基础](../01-pod/sidecar-native.md)
+2. [工作负载配置](./README.md)
+3. [部署策略](../05-patterns/deployment-strategies.md)
 
 ---
 
@@ -137,5 +135,5 @@ spec:
 
 ## 关联代码
 
-- [examples/kubernetes/01-basic-resources/](../../examples/kubernetes/01-basic-resources/)
-- [examples/kubernetes/02-deployment-patterns/](../../examples/kubernetes/02-deployment-patterns/)
+- [K8s 示例](../../examples/kubernetes/)
+- [部署示例](../../examples/kubernetes/)

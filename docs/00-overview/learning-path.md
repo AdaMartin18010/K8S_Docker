@@ -1,6 +1,6 @@
 # 学习路径指南
 
-本文档提供不同角色的个性化学习路径。
+> 基于实际文档结构的个性化学习路径
 
 ---
 
@@ -11,11 +11,15 @@
 ### 第一阶段：Docker 基础 (2 周)
 
 **学习内容**:
-1. [01-fundamentals/container-basics.md](../01-fundamentals/container-basics.md)
-2. [02-docker/01-core-concepts/](../02-docker/01-core-concepts/)
-3. [02-docker/02-dockerfile/best-practices.md](../02-docker/02-dockerfile/best-practices.md)
+
+1. [容器基础概念](../01-fundamentals/container-overview.md)
+2. [容器 vs 虚拟机](../01-fundamentals/container-vs-vm.md)
+3. [Linux Namespace](../01-fundamentals/linux-namespace.md)
+4. [Docker 架构](../02-docker/01-core-concepts/docker-architecture.md)
+5. [Dockerfile 最佳实践](../02-docker/02-dockerfile/best-practices.md)
 
 **实践项目**:
+
 - 将自己的应用 Docker 化
 - 编写多阶段 Dockerfile
 - 使用 Docker Compose 本地开发
@@ -23,12 +27,15 @@
 ### 第二阶段：K8s 基础 (3 周)
 
 **学习内容**:
-1. [03-kubernetes/01-architecture/](../03-kubernetes/01-architecture/)
-2. [03-kubernetes/02-workloads/pods.md](../03-kubernetes/02-workloads/pods.md)
-3. [03-kubernetes/02-workloads/deployments.md](../03-kubernetes/02-workloads/deployments.md)
-4. [03-kubernetes/03-networking/services.md](../03-kubernetes/03-networking/services.md)
+
+1. [K8s 架构](../03-kubernetes/01-architecture/)
+2. [原生 Sidecar](../03-kubernetes/01-pod/sidecar-native.md)
+3. [工作负载](../03-kubernetes/02-workloads/)
+4. [网络](../03-kubernetes/03-networking/)
+5. [存储](../03-kubernetes/04-storage/)
 
 **实践项目**:
+
 - 在本地集群 (minikube/kind) 部署应用
 - 配置健康检查和资源限制
 - 实现配置分离 (ConfigMap/Secret)
@@ -36,8 +43,10 @@
 ### 第三阶段：生产实践 (2 周)
 
 **学习内容**:
-1. [03-kubernetes/05-security/pod-security.md](../03-kubernetes/05-security/pod-security.md)
-2. [06-practices/cicd-guide.md](../06-practices/cicd-guide.md)
+
+1. [K8s 安全](../03-kubernetes/05-security/)
+2. [运维实践](../03-kubernetes/06-operations/)
+3. [CI/CD 指南](../06-practices/cicd-guide.md)
 
 ---
 
@@ -48,24 +57,31 @@
 ### 第一阶段：深度 Docker (2 周)
 
 **学习内容**:
-1. [02-docker/04-security/](../02-docker/04-security/)
-2. [02-docker/02-dockerfile/multi-stage.md](../02-docker/02-dockerfile/multi-stage.md)
+
+1. [Docker 网络](../02-docker/01-core-concepts/networking.md)
+2. [Docker 存储](../02-docker/01-core-concepts/storage.md)
+3. [Dockerfile 安全](../02-docker/02-dockerfile/security.md)
+4. [容器安全](../02-docker/04-security/)
 
 ### 第二阶段：K8s 深度 (4 周)
 
 **学习内容**:
-1. [03-kubernetes/01-architecture/](../03-kubernetes/01-architecture/) - 深度理解
-2. [03-kubernetes/03-networking/](../03-kubernetes/03-networking/)
-3. [03-kubernetes/04-storage/](../03-kubernetes/04-storage/)
-4. [03-kubernetes/05-security/](../03-kubernetes/05-security/)
-5. [03-kubernetes/06-operations/](../03-kubernetes/06-operations/)
+
+1. [K8s 架构](../03-kubernetes/01-architecture/) - 深度理解
+2. [网络](../03-kubernetes/03-networking/) - CNI、Service、Ingress
+3. [存储](../03-kubernetes/04-storage/) - PV、PVC、StorageClass
+4. [可观测性](../03-kubernetes/05-observability/)
+5. [安全](../03-kubernetes/05-security/)
+6. [运维](../03-kubernetes/06-operations/)
 
 ### 第三阶段：云原生生态 (3 周)
 
 **学习内容**:
-1. [04-cloud-native/02-gitops/](../04-cloud-native/02-gitops/)
-2. [04-cloud-native/03-observability/](../04-cloud-native/03-observability/)
-3. [05-patterns/](../05-patterns/)
+
+1. [GitOps](../04-ecosystem/gitops/)
+2. [可观测性](../05-tools/observability/)
+3. [监控工具](../05-tools/prometheus-3/)
+4. [设计模式](../05-patterns/)
 
 ---
 
@@ -76,23 +92,31 @@
 ### 第一阶段：理论基础 (2 周)
 
 **学习内容**:
-1. [01-fundamentals/](../01-fundamentals/)
-2. [03-kubernetes/01-architecture/](../03-kubernetes/01-architecture/)
+
+1. [OCI 标准](../01-fundamentals/oci-standard.md)
+2. [容器运行时](../01-fundamentals/containerd-runtimes.md)
+3. [K8s 架构](../03-kubernetes/01-architecture/)
+4. [K8s 1.33 新特性](../03-kubernetes/whats-new-1.33.md)
 
 ### 第二阶段：设计模式 (3 周)
 
 **学习内容**:
-1. [05-patterns/microservices.md](../05-patterns/microservices.md)
-2. [05-patterns/deployment-strategies.md](../05-patterns/deployment-strategies.md)
-3. [05-patterns/resilience.md](../05-patterns/resilience.md)
+
+1. [Sidecar 模式](../05-patterns/sidecar-pattern.md)
+2. [微服务模式](../05-patterns/microservices.md)
+3. [部署策略](../05-patterns/deployment-strategies.md)
+4. [混沌工程](../06-practices/chaos-engineering/)
 
 ### 第三阶段：完整生态 (4 周)
 
 **学习内容**:
-1. [04-cloud-native/01-service-mesh/](../04-cloud-native/01-service-mesh/)
-2. [04-cloud-native/02-gitops/](../04-cloud-native/02-gitops/)
-3. [04-cloud-native/03-observability/](../04-cloud-native/03-observability/)
-4. [06-practices/case-studies/](../06-practices/case-studies/)
+
+1. [服务网格](../04-ecosystem/service-mesh/)
+2. [eBPF/Cilium](../04-ecosystem/ebpf-cilium/)
+3. [GitOps](../04-ecosystem/gitops/)
+4. [Dapr](../04-ecosystem/dapr/)
+5. [Knative](../04-ecosystem/knative/)
+6. [Crossplane](../04-ecosystem/crossplane/)
 
 ---
 

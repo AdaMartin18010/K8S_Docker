@@ -6,11 +6,9 @@
 
 ## 本章内容
 
-1. [Dockerfile 基础语法](./syntax.md)
+1. [Dockerfile 基础语法](./README.md)
 2. [最佳实践](./best-practices.md)
-3. [多阶段构建](./multi-stage.md)
-4. [BuildKit 高级特性](./buildkit-features.md)
-5. [安全加固](./security-hardening.md)
+3. [安全加固](./security.md)
 
 ---
 
@@ -98,6 +96,6 @@ CMD ["node", "dist/main.js"]
 
 ## 关联代码
 
-- [examples/docker/basic/Dockerfile.good](../../examples/docker/basic/Dockerfile.good)
-- [examples/docker/basic/Dockerfile.bad](../../examples/docker/basic/Dockerfile.bad)
-- [examples/docker/multi-stage/Dockerfile](../../examples/docker/multi-stage/Dockerfile)
+- [Dockerfile 示例](../../examples/docker/)
+- [Dockerfile 示例](../../examples/docker/)
+- [多阶段构建示例](../../examples/docker/)

@@ -7,11 +7,10 @@
 ## 本章内容
 
 1. [CI/CD 实践](./cicd-guide.md)
-2. [安全加固](./security-hardening.md)
-3. [性能调优](./performance-tuning.md)
-4. [成本优化](./cost-optimization.md)
-5. [故障排查](./troubleshooting.md)
-6. [行业案例](./case-studies/)
+2. [性能调优](./performance-benchmarks.md)
+3. [故障排查](./debugging-guide.md)
+4. [混沌工程](./chaos-engineering/)
+5. [案例研究](./case-studies/)
 
 ---
 

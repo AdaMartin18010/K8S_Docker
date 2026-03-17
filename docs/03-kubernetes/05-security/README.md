@@ -6,12 +6,9 @@
 
 ## 本章内容
 
-1. [安全概述](./security-overview.md)
-2. [RBAC 权限控制](./rbac.md)
-3. [Pod 安全标准](./pod-security-standards.md)
-4. [NetworkPolicy](./network-policy.md)
-5. [Secret 管理](./secrets.md)
-6. [镜像安全](./image-security.md)
+1. [安全概述](./README.md)
+2. [Dockerfile 安全](../02-docker/02-dockerfile/security.md)
+3. [供应链安全](../../04-ecosystem/supply-chain-security/)
 
 ---
 
@@ -106,4 +103,4 @@ roleRef:
 
 ## 关联代码
 
-- [examples/kubernetes/06-security/](../../examples/kubernetes/06-security/)
+- [安全示例](../../examples/kubernetes/)
