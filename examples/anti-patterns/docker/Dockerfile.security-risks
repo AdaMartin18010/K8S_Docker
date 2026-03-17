@@ -1,0 +1,56 @@
+# ============================================================================
+# ❌ 反例：Dockerfile 安全风险
+# 此文件展示常见的 Dockerfile 安全错误
+# ============================================================================
+
+# ❌ 错误 1: 使用 root 用户
+FROM ubuntu:20.04
+
+# ❌ 错误 2: 使用 latest 标签
+FROM node:latest
+
+# ❌ 错误 3: 没有指定维护者
+
+# ❌ 错误 4: 使用 ADD 下载远程文件（可能被劫持）
+ADD https://example.com/app.tar.gz /app/
+
+# ❌ 错误 5: 运行 apt-get upgrade（可能破坏基础镜像）
+RUN apt-get update && apt-get upgrade -y
+
+# ❌ 错误 6: 安装不必要的包
+RUN apt-get install -y \
+    curl wget vim nano telnet netcat \
+    gcc g++ make \
+    python python-pip
+
+# ❌ 错误 7: 使用 sudo
+RUN sudo apt-get install -y some-package
+
+# ❌ 错误 8: 将 SSH 密钥复制到镜像
+COPY id_rsa /root/.ssh/id_rsa
+COPY id_rsa.pub /root/.ssh/id_rsa.pub
+
+# ❌ 错误 9: 硬编码密码
+ENV DATABASE_PASSWORD=supersecret123
+ENV API_KEY=sk-1234567890abcdef
+ENV AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+
+# ❌ 错误 10: 暴露敏感端口
+EXPOSE 22
+EXPOSE 3306
+
+# ❌ 错误 11: 下载并执行远程脚本
+RUN curl -fsSL https://example.com/install.sh | bash
+
+# ❌ 错误 12: 使用 git clone 而不验证
+RUN git clone https://github.com/some/repo.git
+
+# ❌ 错误 13: 不清理缓存
+RUN apt-get update && apt-get install -y python
+# 缺少: && rm -rf /var/lib/apt/lists/*
+
+# ❌ 错误 14: 使用 COPY . . 复制所有文件
+COPY . .
+
+# ❌ 错误 15: 以 root 运行
+CMD ["node", "server.js"]

@@ -1,0 +1,54 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
+docs/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Tests
+*_test.go
+coverage.out
+
+# Build artifacts
+dist/
+build/
+
+# Docker
+Dockerfile*
+docker-compose*
+.docker/
+
+# Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key

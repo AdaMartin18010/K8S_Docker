@@ -1,0 +1,48 @@
+# ============================================================================
+# ❌ 反例：Dockerfile 性能问题
+# 此文件展示影响构建和运行性能的错误
+# ============================================================================
+
+FROM node:20
+
+WORKDIR /app
+
+# ❌ 错误 1: 没有利用缓存 - 先复制源代码再安装依赖
+COPY . .
+RUN npm install
+
+# ❌ 错误 2: 多个 RUN 指令产生过多层
+RUN npm install package1
+RUN npm install package2
+RUN npm install package3
+
+# ❌ 错误 3: 没有清理构建缓存
+RUN npm install && npm run build
+
+# ❌ 错误 4: 使用庞大的基础镜像
+FROM ubuntu:20.04
+# 应该使用: FROM node:20-alpine
+
+# ❌ 错误 5: 在最终镜像中包含构建工具
+RUN apt-get install -y gcc g++ make python
+
+# ❌ 错误 6: 没有使用 .dockerignore 导致上下文过大
+# 会复制 node_modules, .git 等
+
+# ❌ 错误 7: 一次性安装所有依赖（开发+生产）
+RUN npm install
+# 应该使用: RUN npm ci --only=production
+
+# ❌ 错误 8: 没有使用多阶段构建
+# 构建产物和源代码混在一起
+
+# ❌ 错误 9: 在 RUN 中使用 && 过多导致缓存失效
+RUN apt-get update && \
+    apt-get install -y pkg1 && \
+    apt-get install -y pkg2 && \
+    apt-get install -y pkg3 && \
+    apt-get clean
+
+# ❌ 错误 10: 使用 chown 改变大目录所有权
+RUN chown -R user:user /app
+# 应该在 COPY 时设置: COPY --chown=user:user . .

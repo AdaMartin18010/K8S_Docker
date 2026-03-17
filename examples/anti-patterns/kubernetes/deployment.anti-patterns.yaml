@@ -1,0 +1,130 @@
+# ============================================================================
+# ❌ 反例：Deployment 常见错误
+# 此文件展示部署配置中的反模式
+# ============================================================================
+
+---
+# ❌ 错误 1: 没有资源限制
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: no-resources-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: myapp
+  template:
+    spec:
+      containers:
+        - name: app
+          image: myapp:latest
+          # ❌ 缺少 resources 配置
+          # 会导致：无法预测资源使用、无法自动扩缩容、可能被驱逐
+
+---
+# ❌ 错误 2: 使用 latest 标签
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: latest-tag-deployment
+spec:
+  template:
+    spec:
+      containers:
+        - name: app
+          image: myapp:latest  # ❌ 不可重现的部署
+          imagePullPolicy: IfNotPresent  # ❌ 可能使用本地旧镜像
+
+---
+# ❌ 错误 3: 没有健康检查
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: no-health-checks-deployment
+spec:
+  template:
+    spec:
+      containers:
+        - name: app
+          image: myapp:v1.0.0
+          # ❌ 缺少 livenessProbe
+          # ❌ 缺少 readinessProbe
+          # 后果：故障 Pod 不会被重启，未就绪 Pod 会接收流量
+
+---
+# ❌ 错误 4: 错误的滚动更新配置
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bad-rolling-update-deployment
+spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 100%      # ❌ 同时创建所有新 Pod，资源激增
+      maxUnavailable: 50% # ❌ 同时终止一半 Pod，可用性风险
+  replicas: 2
+
+---
+# ❌ 错误 5: 没有 Pod 中断预算
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: no-pdb-deployment
+spec:
+  replicas: 2
+  # ❌ 缺少对应的 PodDisruptionBudget
+  # 后果：节点维护时可能同时终止所有 Pod
+
+---
+# ❌ 错误 6: 没有安全上下文
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: insecure-deployment
+spec:
+  template:
+    spec:
+      # ❌ 缺少 securityContext
+      containers:
+        - name: app
+          image: myapp:v1.0.0
+          securityContext:
+            # ❌ 没有 runAsNonRoot
+            # ❌ 没有 readOnlyRootFilesystem
+            # ❌ 没有 capabilities: drop: [ALL]
+
+---
+# ❌ 错误 7: 硬编码敏感信息
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hardcoded-secrets-deployment
+spec:
+  template:
+    spec:
+      containers:
+        - name: app
+          image: myapp:v1.0.0
+          env:
+            - name: DB_PASSWORD
+              value: "supersecret123"  # ❌ 硬编码密码
+            - name: API_KEY
+              value: "sk-1234567890"   # ❌ 硬编码密钥
+
+---
+# ❌ 错误 8: 没有优雅的终止处理
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: no-graceful-shutdown-deployment
+spec:
+  template:
+    spec:
+      containers:
+        - name: app
+          image: myapp:v1.0.0
+          # ❌ 缺少 lifecycle.preStop
+          # ❌ 没有处理 SIGTERM
+      terminationGracePeriodSeconds: 0  # ❌ 立即终止，没有优雅期

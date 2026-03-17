@@ -1,0 +1,174 @@
+# ============================================================================
+# RBAC 最佳实践
+# 最小权限原则 (Principle of Least Privilege)
+# ============================================================================
+
+---
+# Service Account
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: web-app-sa
+  namespace: production
+  labels:
+    app: web-app
+automountServiceAccountToken: false  # 默认不自动挂载
+
+---
+# Role - 命名空间级别权限
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: web-app-role
+  namespace: production
+  labels:
+    app: web-app
+rules:
+  # 仅允许读取 ConfigMap
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+    resourceNames: ["web-app-config"]  # 仅特定资源
+  
+  # 仅允许读取 Secret
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+    resourceNames: ["db-credentials"]  # 仅特定资源
+  
+  # 允许创建事件（用于审计）
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create"]
+
+---
+# RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: web-app-rolebinding
+  namespace: production
+  labels:
+    app: web-app
+subjects:
+  - kind: ServiceAccount
+    name: web-app-sa
+    namespace: production
+roleRef:
+  kind: Role
+  name: web-app-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ClusterRole - 集群级别权限（谨慎使用）
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus-monitoring
+  labels:
+    app: prometheus
+rules:
+  # 发现目标
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - nodes/proxy
+      - services
+      - endpoints
+      - pods
+    verbs: ["get", "list", "watch"]
+  
+  # 读取指标
+  - apiGroups:
+      - "extensions"
+      - "networking.k8s.io"
+    resources:
+      - ingresses
+    verbs: ["get", "list", "watch"]
+  
+  # 节点指标
+  - apiGroups:
+      - "metrics.k8s.io"
+    resources:
+      - "*"
+    verbs: ["get", "list", "watch"]
+
+---
+# ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-monitoring
+  labels:
+    app: prometheus
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: monitoring
+roleRef:
+  kind: ClusterRole
+  name: prometheus-monitoring
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# 管理员角色（审计使用）
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: restricted-admin
+  labels:
+    tier: admin
+rules:
+  # 读取所有资源
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  
+  # 修改除 RBAC 和 Secret 外的资源
+  - apiGroups: [""]
+    resources:
+      - pods
+      - services
+      - configmaps
+      - persistentvolumeclaims
+    verbs: ["*"]
+  
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - statefulsets
+      - daemonsets
+      - replicasets
+    verbs: ["*"]
+  
+  # 显式拒绝 RBAC（通过不列出）
+  # 显式拒绝 Secret（通过不列出）
+
+---
+# 动态准入控制 - 限制特权容器
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: gatekeeper-admin
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+---
+# Pod Security Standards - 使用 Pod Security Admission
+# 在命名空间上添加标签
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+  labels:
+    # 强制使用 restricted 策略
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    # 审计 warn 级别违规
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+    # 警告 warn 级别违规
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest

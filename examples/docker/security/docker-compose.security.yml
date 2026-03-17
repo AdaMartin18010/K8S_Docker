@@ -1,0 +1,137 @@
+# ============================================================================
+# 安全加固 Docker Compose 配置
+# 遵循 CIS Docker Benchmark 和 Defense in Depth 原则
+# ============================================================================
+
+version: "3.8"
+
+services:
+  secure-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.secure
+    
+    container_name: secure-app
+    restart: unless-stopped
+    
+    # ========== 安全选项 ==========
+    security_opt:
+      # 禁止提升权限
+      - no-new-privileges:true
+      # 使用 seccomp 配置文件（限制系统调用）
+      - seccomp:./security/seccomp-profile.json
+      # 使用 AppArmor 配置文件
+      - apparmor:docker-secure-app
+    
+    # ========== 用户权限 ==========
+    # 明确指定用户（不能是 root）
+    user: "65534:65534"
+    
+    # ========== 文件系统安全 ==========
+    # 只读文件系统
+    read_only: true
+    
+    # 临时文件系统（用于应用需要写入的临时目录）
+    tmpfs:
+      # noexec: 禁止执行
+      # nosuid: 禁止 SUID
+      # nodev: 禁止设备文件
+      # size: 限制大小
+      - /tmp:noexec,nosuid,nodev,size=100m,uid=65534,gid=65534
+      - /var/tmp:noexec,nosuid,nodev,size=50m,uid=65534,gid=65534
+    
+    # ========== 能力限制 ==========
+    # 删除所有能力，按需添加
+    cap_drop:
+      - ALL
+    # 仅保留必需的能力（这里示例应用不需要任何特权能力）
+    # cap_add:
+    #   - NET_BIND_SERVICE  # 如果需要绑定低端口
+    
+    # ========== 资源限制 ==========
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+          # 限制 PIDs 防止 fork 炸弹
+          pids: 50
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    
+    # ========== 网络隔离 ==========
+    networks:
+      - isolated
+    
+    # 不映射任何端口到宿主机（使用反向代理）
+    expose:
+      - "8080"
+    
+    # ========== 环境变量 ==========
+    environment:
+      - ENV=production
+      # 敏感信息通过 secrets 传递
+      - DB_PASSWORD_FILE=/run/secrets/db_password
+    
+    secrets:
+      - db_password
+    
+    # ========== 卷挂载 ==========
+    volumes:
+      # 只读挂载配置文件
+      - ./config:/app/config:ro
+      # 只读挂载静态资源
+      - ./static:/app/static:ro
+    
+    # ========== 健康检查 ==========
+    healthcheck:
+      test: ["CMD", "/app", "health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    
+    # ========== 日志配置 ==========
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        # 添加标签便于审计
+        labels: "service_name,environment,security_level"
+        env: "OS_VERSION"
+
+  # 安全监控 sidecar
+  security-monitor:
+    image: falco/falco:latest
+    container_name: security-monitor
+    privileged: true  # Falco 需要特权来监控系统调用
+    
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /dev:/dev
+      - /proc:/host/proc:ro
+      - /boot:/host/boot:ro
+      - /lib/modules:/host/lib/modules:ro
+      - /usr:/host/usr:ro
+      - ./security/falco-rules.yaml:/etc/falco/falco_rules.local.yaml:ro
+    
+    networks:
+      - isolated
+
+# ========== Secrets ==========
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+
+# ========== 网络 ==========
+networks:
+  isolated:
+    driver: bridge
+    # 内部网络，禁止外部访问
+    internal: true
+    # IPAM 配置
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24

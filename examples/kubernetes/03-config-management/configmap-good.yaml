@@ -1,0 +1,147 @@
+# ============================================================================
+# ConfigMap 最佳实践
+# 分离配置与代码，支持热更新
+# ============================================================================
+
+---
+# 应用配置
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-app-config
+  namespace: production
+  labels:
+    app: web-app
+    component: config
+data:
+  # 简单键值对
+  ENV: "production"
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
+  PORT: "8080"
+  METRICS_PORT: "9090"
+  
+  # 完整的配置文件
+  app.conf: |
+    [server]
+    host = 0.0.0.0
+    port = 8080
+    read_timeout = 30s
+    write_timeout = 30s
+    graceful_shutdown_timeout = 60s
+    
+    [database]
+    max_open_conns = 25
+    max_idle_conns = 10
+    conn_max_lifetime = 5m
+    
+    [cache]
+    default_ttl = 5m
+    max_size = 1000
+    
+    [feature_flags]
+    enable_new_feature = false
+    enable_cache = true
+    enable_metrics = true
+  
+  logging.conf: |
+    {
+      "level": "info",
+      "format": "json",
+      "output": "stdout",
+      "fields": {
+        "service": "web-app",
+        "environment": "production"
+      }
+    }
+  
+  nginx.conf: |
+    server {
+      listen 80;
+      server_name localhost;
+      
+      location / {
+        proxy_pass http://localhost:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_connect_timeout 30s;
+        proxy_send_timeout 30s;
+        proxy_read_timeout 30s;
+      }
+      
+      location /health {
+        access_log off;
+        return 200 "healthy\n";
+      }
+    }
+
+---
+# 环境特定配置（开发环境）
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-app-config-dev
+  namespace: development
+  labels:
+    app: web-app
+    component: config
+    environment: dev
+data:
+  ENV: "development"
+  LOG_LEVEL: "debug"
+  LOG_FORMAT: "pretty"
+  DEBUG: "true"
+  FEATURE_FLAGS: |
+    enable_new_feature=true
+    enable_debug_endpoints=true
+
+---
+# Prometheus 监控配置
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+  labels:
+    app: prometheus
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      external_labels:
+        cluster: production
+        replica: '{{.ExternalURL}}'
+    
+    rule_files:
+      - /etc/prometheus/rules/*.yml
+    
+    scrape_configs:
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+      
+      - job_name: 'kubernetes-pods'
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          - action: labelmap
+            regex: __meta_kubernetes_pod_label_(.+)
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: kubernetes_namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: kubernetes_pod_name

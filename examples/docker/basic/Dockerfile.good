@@ -1,0 +1,95 @@
+# ============================================================================
+# 最佳实践 Dockerfile 示例
+# 演示：多阶段构建、非 root 用户、安全加固、BuildKit 特性
+# ============================================================================
+
+# syntax=docker/dockerfile:1.6
+# 启用 BuildKit 语法，支持最新特性
+
+# ----------------------------------------------------------------------------
+# 阶段 1: 构建阶段 (Build Stage)
+# ----------------------------------------------------------------------------
+FROM golang:1.22-alpine3.19 AS builder
+
+# 安装依赖
+RUN apk add --no-cache git ca-certificates tzdata
+
+# 设置时区
+ENV TZ=Asia/Shanghai
+
+# 创建非 root 用户
+RUN adduser -D -g '' appuser
+
+WORKDIR /src
+
+# 利用缓存：先复制依赖文件，再复制源代码
+COPY go.mod go.sum ./
+
+# 下载依赖（利用 BuildKit 缓存挂载）
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download && go mod verify
+
+# 复制源代码
+COPY . .
+
+# 构建二进制文件
+# 启用静态链接，CGO 禁用，确保在 scratch 镜像中运行
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags='-w -s -extldflags "-static"' \
+    -a -installsuffix cgo \
+    -o /bin/app \
+    ./cmd/server
+
+# ----------------------------------------------------------------------------
+# 阶段 2: 安全扫描阶段 (Security Scan Stage)
+# ----------------------------------------------------------------------------
+FROM builder AS security-scan
+
+# 使用 Trivy 进行漏洞扫描（可选）
+RUN --mount=type=cache,target=/tmp/trivy \
+    if command -v trivy &> /dev/null; then \
+        trivy filesystem --exit-code 0 --no-progress /src; \
+    fi
+
+# ----------------------------------------------------------------------------
+# 阶段 3: 运行阶段 (Runtime Stage)
+# ----------------------------------------------------------------------------
+# 使用最小的基础镜像
+FROM gcr.io/distroless/static:nonroot
+
+# 元数据标签
+LABEL org.opencontainers.image.title="Go App" \
+      org.opencontainers.image.description="Production-ready Go application" \
+      org.opencontainers.image.version="1.0.0" \
+      org.opencontainers.image.source="https://github.com/example/app" \
+      org.opencontainers.image.licenses="MIT"
+
+# 从 builder 复制 CA 证书
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
+# 从 builder 复制时区数据
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+
+# 从 builder 复制用户配置
+COPY --from=builder /etc/passwd /etc/passwd
+
+# 从 builder 复制编译好的二进制文件
+COPY --from=builder --chown=nonroot:nonroot /bin/app /app
+
+# 设置时区环境变量
+ENV TZ=Asia/Shanghai
+
+# 使用非 root 用户运行（安全最佳实践）
+USER nonroot:nonroot
+
+# 暴露端口
+EXPOSE 8080
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD ["/app", "health"] || exit 1
+
+# 使用 exec 格式，确保信号正确传递
+ENTRYPOINT ["/app"]

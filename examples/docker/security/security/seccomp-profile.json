@@ -1,0 +1,86 @@
+{
+  "defaultAction": "SCMP_ACT_ERRNO",
+  "archMap": [
+    {
+      "architecture": "SCMP_ARCH_X86_64",
+      "subArchitectures": [
+        "SCMP_ARCH_X86",
+        "SCMP_ARCH_X32"
+      ]
+    },
+    {
+      "architecture": "SCMP_ARCH_AARCH64",
+      "subArchitectures": [
+        "SCMP_ARCH_ARM"
+      ]
+    }
+  ],
+  "syscalls": [
+    {
+      "names": [
+        "accept",
+        "accept4",
+        "bind",
+        "clone",
+        "clone3",
+        "close",
+        "connect",
+        "epoll_create",
+        "epoll_create1",
+        "epoll_ctl",
+        "epoll_pwait",
+        "epoll_wait",
+        "eventfd2",
+        "exit",
+        "exit_group",
+        "fcntl",
+        "fstat",
+        "fstatfs",
+        "futex",
+        "getdents64",
+        "getpeername",
+        "getpgrp",
+        "getpid",
+        "getppid",
+        "getrandom",
+        "getsockname",
+        "getsockopt",
+        "ioctl",
+        "listen",
+        "mmap",
+        "mprotect",
+        "munmap",
+        "nanosleep",
+        "openat",
+        "pipe2",
+        "poll",
+        "read",
+        "recvfrom",
+        "recvmsg",
+        "rt_sigaction",
+        "rt_sigprocmask",
+        "rt_sigreturn",
+        "sched_getaffinity",
+        "sched_yield",
+        "sendmsg",
+        "sendto",
+        "setitimer",
+        "setsockopt",
+        "shutdown",
+        "sigaltstack",
+        "socket",
+        "socketpair",
+        "tgkill",
+        "write",
+        "writev"
+      ],
+      "action": "SCMP_ACT_ALLOW"
+    },
+    {
+      "names": [
+        "chroot"
+      ],
+      "action": "SCMP_ACT_ERRNO"
+    }
+  ]
+}

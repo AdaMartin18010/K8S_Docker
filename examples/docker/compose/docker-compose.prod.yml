@@ -1,0 +1,71 @@
+# ============================================================================
+# 生产环境覆盖配置
+# 包含：副本数、资源限制、滚动更新策略
+# ============================================================================
+
+services:
+  app:
+    deploy:
+      mode: replicated
+      replicas: 3
+      
+      # 滚动更新策略
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
+      
+      # 回滚策略
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: pause
+        monitor: 60s
+      
+      # 重启策略
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      
+      # 资源限制（生产严格限制）
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+      
+      # 放置约束
+      placement:
+        constraints:
+          - node.role == worker
+        preferences:
+          - spread: node.availability_zone
+    
+    # 生产环境日志发送到中央日志系统
+    logging:
+      driver: syslog
+      options:
+        syslog-address: "tcp://logs.example.com:514"
+        tag: "docker/{{.Name}}"
+
+  nginx:
+    deploy:
+      mode: global  # 每个节点运行一个
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+
+  # 生产环境禁用开发工具
+  adminer:
+    deploy:
+      replicas: 0
+
+  redis-commander:
+    deploy:
+      replicas: 0

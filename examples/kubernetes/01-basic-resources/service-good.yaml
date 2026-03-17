@@ -1,0 +1,161 @@
+# ============================================================================
+# Service 最佳实践示例
+# 包含：ClusterIP, NodePort, LoadBalancer, Headless, ExternalName
+# ============================================================================
+
+---
+# ClusterIP - 内部服务发现（默认，推荐）
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app-internal
+  namespace: production
+  labels:
+    app: web-app
+  annotations:
+    # 描述用途
+    service.beta.kubernetes.io/description: "Internal service for web-app"
+spec:
+  type: ClusterIP
+  selector:
+    app: web-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+  # 会话亲和性（如果需要）
+  # sessionAffinity: ClientIP
+  # sessionAffinityConfig:
+  #   clientIP:
+  #     timeoutSeconds: 10800
+
+---
+# Headless Service - 用于 StatefulSet 直接访问 Pod
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app-headless
+  namespace: production
+  labels:
+    app: web-app
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless 关键配置
+  selector:
+    app: web-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  # 发布未就绪地址（用于有状态服务发现）
+  publishNotReadyAddresses: true
+
+---
+# NodePort - 开发测试使用，生产不推荐
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app-nodeport
+  namespace: production
+  labels:
+    app: web-app
+spec:
+  type: NodePort
+  selector:
+    app: web-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      # 指定 NodePort（可选，不指定则随机分配 30000-32767）
+      nodePort: 30080
+  # 外部流量策略
+  externalTrafficPolicy: Local  # 保留客户端源 IP
+
+---
+# LoadBalancer - 云环境外部访问
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app-lb
+  namespace: production
+  labels:
+    app: web-app
+  annotations:
+    # AWS NLB 配置
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+    # GCP 配置
+    # cloud.google.com/load-balancer-type: "External"
+    # Azure 配置
+    # service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path: /health
+    # 健康检查路径
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-path: /health/ready
+    # 连接耗尽
+    service.beta.kubernetes.io/aws-load-balancer-connection-draining-enabled: "true"
+    service.beta.kubernetes.io/aws-load-balancer-connection-draining-timeout: "60"
+spec:
+  type: LoadBalancer
+  selector:
+    app: web-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+    - name: https
+      port: 443
+      targetPort: 8443
+      protocol: TCP
+  # 外部流量策略
+  externalTrafficPolicy: Local
+  # 健康检查节点端口（部分云平台需要）
+  healthCheckNodePort: 30081
+  # 负载均衡器源范围
+  loadBalancerSourceRanges:
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+
+---
+# ExternalName - 映射到外部服务
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-database
+  namespace: production
+spec:
+  type: ExternalName
+  # 指向外部数据库地址
+  externalName: prod-db.example.com
+  # 注意：ExternalName 没有 selector
+
+---
+# EndpointSlice - 手动定义端点（用于外部服务）
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: external-api-endpoints
+  namespace: production
+  labels:
+    kubernetes.io/service-name: external-api
+addressType: IPv4
+ports:
+  - name: http
+    port: 80
+    protocol: TCP
+endpoints:
+  - addresses:
+      - 203.0.113.1
+      - 203.0.113.2
+    conditions:
+      ready: true
+    hostname: external-api-1
+  - addresses:
+      - 203.0.113.3
+    conditions:
+      ready: false  # 标记为不可用

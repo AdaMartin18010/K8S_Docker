@@ -1,0 +1,277 @@
+# ============================================================================
+# Pod 最佳实践示例
+# 演示：资源限制、健康检查、安全上下文、节点选择
+# ============================================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-app-good
+  namespace: production
+  labels:
+    app: web-app
+    version: v1
+    tier: frontend
+  annotations:
+    # 审计注解
+    compliance/check: "passed"
+    security/scan-date: "2024-01-01"
+spec:
+  # ========== 安全上下文 ==========
+  securityContext:
+    # 禁止 root 用户
+    runAsNonRoot: true
+    # 指定用户和组 ID
+    runAsUser: 1000
+    runAsGroup: 1000
+    # 文件系统组
+    fsGroup: 1000
+    # 禁止权限提升
+    allowPrivilegeEscalation: false
+    # 只读根文件系统
+    readOnlyRootFilesystem: true
+    # 丢弃所有 capabilities
+    capabilities:
+      drop:
+        - ALL
+    # 添加必需的最小能力（示例不需要）
+    # add:
+    #   - NET_BIND_SERVICE
+  
+  # ========== 节点选择 ==========
+  # 节点选择器
+  nodeSelector:
+    node-type: worker
+    environment: production
+  
+  # 容忍度
+  tolerations:
+    - key: "dedicated"
+      operator: "Equal"
+      value: "web"
+      effect: "NoSchedule"
+  
+  # 亲和性规则
+  affinity:
+    # Pod 亲和性：倾向于与同一服务的 Pod 共存
+    podAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                    - web-app
+            topologyKey: kubernetes.io/hostname
+    # Pod 反亲和性：避免与不同版本的 Pod 共存
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: version
+                operator: NotIn
+                values:
+                  - v1
+          topologyKey: kubernetes.io/hostname
+  
+  # ========== 初始化容器 ==========
+  initContainers:
+    - name: init-permissions
+      image: busybox:1.36
+      command:
+        - sh
+        - -c
+        - |
+          mkdir -p /data/logs /data/cache
+          chown -R 1000:1000 /data
+      volumeMounts:
+        - name: data-volume
+          mountPath: /data
+      securityContext:
+        runAsUser: 0  # 临时使用 root 设置权限
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+            - ALL
+      resources:
+        limits:
+          cpu: 100m
+          memory: 64Mi
+        requests:
+          cpu: 50m
+          memory: 32Mi
+  
+  # ========== 主容器 ==========
+  containers:
+    - name: web-app
+      image: myregistry/web-app:v1.0.0
+      imagePullPolicy: Always
+      
+      # 端口配置
+      ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        - name: metrics
+          containerPort: 9090
+          protocol: TCP
+      
+      # 环境变量
+      env:
+        - name: ENV
+          value: "production"
+        - name: PORT
+          value: "8080"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+      
+      # 从 ConfigMap 加载环境变量
+      envFrom:
+        - configMapRef:
+            name: web-app-config
+            optional: true
+      
+      # 资源限制（必需）
+      resources:
+        limits:
+          cpu: 500m
+          memory: 512Mi
+          ephemeral-storage: 1Gi
+        requests:
+          cpu: 100m
+          memory: 128Mi
+          ephemeral-storage: 256Mi
+      
+      # 健康检查 - 启动探针
+      startupProbe:
+        httpGet:
+          path: /health/startup
+          port: http
+        initialDelaySeconds: 10
+        periodSeconds: 5
+        timeoutSeconds: 3
+        failureThreshold: 30  # 10 * 30 = 300s 启动时间
+      
+      # 健康检查 - 存活探针
+      livenessProbe:
+        httpGet:
+          path: /health/live
+          port: http
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
+        successThreshold: 1
+      
+      # 健康检查 - 就绪探针
+      readinessProbe:
+        httpGet:
+          path: /health/ready
+          port: http
+        periodSeconds: 5
+        timeoutSeconds: 3
+        failureThreshold: 3
+        successThreshold: 1
+      
+      # 安全上下文
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+            - ALL
+      
+      # 卷挂载
+      volumeMounts:
+        - name: data-volume
+          mountPath: /app/data
+        - name: cache-volume
+          mountPath: /app/cache
+        - name: tmp-volume
+          mountPath: /tmp
+        - name: config-volume
+          mountPath: /app/config
+          readOnly: true
+      
+      # 生命周期钩子
+      lifecycle:
+        postStart:
+          exec:
+            command:
+              - /bin/sh
+              - -c
+              - echo "Pod $(POD_NAME) started on $(NODE_NAME)"
+        preStop:
+          exec:
+            command:
+              - /bin/sh
+              - -c
+              - sleep 15 && echo "Shutting down gracefully..."
+  
+  # ========== 卷定义 ==========
+  volumes:
+    # 持久化存储
+    - name: data-volume
+      persistentVolumeClaim:
+        claimName: web-app-data
+    # 临时存储（内存）
+    - name: cache-volume
+      emptyDir:
+        medium: Memory
+        sizeLimit: 100Mi
+    # 临时目录
+    - name: tmp-volume
+      emptyDir:
+        sizeLimit: 100Mi
+    # 配置文件
+    - name: config-volume
+      configMap:
+        name: web-app-config
+        items:
+          - key: app.conf
+            path: app.conf
+          - key: logging.conf
+            path: logging.conf
+  
+  # ========== 重启策略 ==========
+  restartPolicy: Always
+  
+  # ========== DNS 配置 ==========
+  dnsPolicy: ClusterFirst
+  dnsConfig:
+    options:
+      - name: ndots
+        value: "2"
+      - name: single-request-reopen
+  
+  # ========== 调度配置 ==========
+  # 优先级类
+  priorityClassName: production-high
+  
+  # 服务账户
+  serviceAccountName: web-app-sa
+  automountServiceAccountToken: false  # 不需要访问 API 时禁用
+  
+  # 终止优雅期
+  terminationGracePeriodSeconds: 60
+  
+  # 镜像拉取密钥
+  imagePullSecrets:
+    - name: regcred

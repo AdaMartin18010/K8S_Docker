@@ -1,0 +1,62 @@
+# ============================================================================
+# ❌ 反例：糟糕的 Dockerfile 实践
+# 以下示例展示了常见的错误做法，请勿在生产环境中使用
+# ============================================================================
+
+# ❌ 错误 1: 使用过大的基础镜像
+FROM ubuntu:20.04
+
+# ❌ 错误 2: 没有指定维护者或元数据
+# 缺少 LABEL 信息
+
+# ❌ 错误 3: 使用 root 用户（默认）
+# 没有 USER 指令
+
+WORKDIR /app
+
+# ❌ 错误 4: 一次性复制所有文件，无法利用缓存
+COPY . .
+
+# ❌ 错误 5: 没有清理缓存，镜像膨胀
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    vim \
+    gcc \
+    git \
+    nodejs \
+    npm
+
+# ❌ 错误 6: 在镜像中硬编码敏感信息
+ENV DATABASE_PASSWORD=mysecretpassword123
+ENV API_KEY=sk-1234567890abcdef
+
+# ❌ 错误 7: 使用 ADD 替代 COPY（ADD 有解压等副作用）
+ADD https://example.com/config.json /app/config.json
+
+# ❌ 错误 8: 使用 latest 标签，构建不可重现
+FROM golang:latest
+
+# ❌ 错误 9: 多个 RUN 指令产生过多层
+RUN go mod download
+RUN go build -o app .
+RUN chmod +x app
+RUN mkdir -p /app/logs
+
+# ❌ 错误 10: 暴露不必要的端口
+EXPOSE 8080 8081 8082 9090 3000
+
+# ❌ 错误 11: 没有健康检查
+# 缺少 HEALTHCHECK
+
+# ❌ 错误 12: 使用 shell 格式，信号处理有问题
+CMD ./app
+
+# ❌ 错误 13: 将构建工具保留在生产镜像中
+# 缺少多阶段构建，编译工具留在最终镜像
+
+# ❌ 错误 14: 没有指定 WORKDIR，文件散乱
+# 之前没有 WORKDIR
+
+# ❌ 错误 15: 权限设置不当
+RUN chmod 777 /app

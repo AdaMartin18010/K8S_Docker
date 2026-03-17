@@ -1,0 +1,125 @@
+# ============================================================================
+# ❌ 反例：Pod 安全配置风险
+# 此文件展示常见的 Kubernetes 安全错误
+# ============================================================================
+
+---
+# ❌ 错误 1: 使用 privileged 特权容器
+apiVersion: v1
+kind: Pod
+metadata:
+  name: privileged-pod
+spec:
+  containers:
+    - name: app
+      image: nginx
+      securityContext:
+        privileged: true  # ❌ 危险！拥有主机 root 权限
+
+---
+# ❌ 错误 2: 允许权限提升
+apiVersion: v1
+kind: Pod
+metadata:
+  name: escalation-pod
+spec:
+  containers:
+    - name: app
+      image: nginx
+      securityContext:
+        allowPrivilegeEscalation: true  # ❌ 允许提升权限
+        runAsUser: 0  # ❌ 以 root 运行
+
+---
+# ❌ 错误 3: 挂载 Docker Socket
+apiVersion: v1
+kind: Pod
+metadata:
+  name: docker-socket-pod
+spec:
+  containers:
+    - name: app
+      image: docker
+      volumeMounts:
+        - name: docker-sock
+          mountPath: /var/run/docker.sock  # ❌ 可以控制主机 Docker
+  volumes:
+    - name: docker-sock
+      hostPath:
+        path: /var/run/docker.sock
+
+---
+# ❌ 错误 4: 使用 hostNetwork 和 hostPID
+apiVersion: v1
+kind: Pod
+metadata:
+  name: host-namespace-pod
+spec:
+  hostNetwork: true  # ❌ 共享主机网络命名空间
+  hostPID: true      # ❌ 可以看到主机进程
+  hostIPC: true      # ❌ 共享主机 IPC
+  containers:
+    - name: app
+      image: nginx
+
+---
+# ❌ 错误 5: 挂载主机根目录
+apiVersion: v1
+kind: Pod
+metadata:
+  name: host-root-pod
+spec:
+  containers:
+    - name: app
+      image: nginx
+      volumeMounts:
+        - name: host-root
+          mountPath: /host  # ❌ 可以访问整个主机文件系统
+  volumes:
+    - name: host-root
+      hostPath:
+        path: /
+
+---
+# ❌ 错误 6: 赋予所有 capabilities
+apiVersion: v1
+kind: Pod
+metadata:
+  name: all-caps-pod
+spec:
+  containers:
+    - name: app
+      image: nginx
+      securityContext:
+        capabilities:
+          add:
+            - NET_ADMIN
+            - SYS_ADMIN
+            - SYS_PTRACE
+            - ALL  # ❌ 添加了所有能力
+
+---
+# ❌ 错误 7: 使用默认 Service Account 并自动挂载
+apiVersion: v1
+kind: Pod
+metadata:
+  name: default-sa-pod
+spec:
+  # 使用默认 service account
+  automountServiceAccountToken: true  # ❌ 自动挂载 token
+  containers:
+    - name: app
+      image: nginx
+
+---
+# ❌ 错误 8: 没有资源限制
+apiVersion: v1
+kind: Pod
+metadata:
+  name: no-limits-pod
+spec:
+  containers:
+    - name: app
+      image: nginx
+      # ❌ 没有 resources 限制
+      # ❌ 可能导致资源耗尽攻击

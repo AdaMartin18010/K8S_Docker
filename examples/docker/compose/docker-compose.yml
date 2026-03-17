@@ -1,0 +1,310 @@
+# ============================================================================
+# Docker Compose 生产级配置示例
+# 包含：应用、数据库、缓存、消息队列、监控
+# ============================================================================
+
+name: production-stack
+
+services:
+  # --------------------------------------------------------------------------
+  # 应用程序服务
+  # --------------------------------------------------------------------------
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+      args:
+        - VERSION=${VERSION:-latest}
+      # BuildKit 缓存配置
+      cache_from:
+        - type=local,src=/tmp/.buildx-cache
+      cache_to:
+        - type=local,dest=/tmp/.buildx-cache,mode=max
+    image: myapp:${VERSION:-latest}
+    container_name: myapp
+    restart: unless-stopped
+    
+    # 资源限制（生产必需）
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    
+    # 环境变量
+    environment:
+      - ENV=production
+      - PORT=8080
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${DB_USER:-app}
+      - DB_PASSWORD=${DB_PASSWORD:?DB_PASSWORD is required}
+      - DB_NAME=${DB_NAME:-myapp}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - LOG_LEVEL=info
+      # 敏感信息使用 secrets
+      - API_KEY_FILE=/run/secrets/api_key
+    
+    env_file:
+      - .env
+    
+    # 端口映射（生产环境建议使用反向代理）
+    ports:
+      - "127.0.0.1:8080:8080"
+    
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "/app", "health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    
+    # 安全选项
+    security_opt:
+      - no-new-privileges:true
+    
+    # 只读文件系统
+    read_only: true
+    
+    # 临时文件系统（用于写入临时数据）
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+    
+    # 用户（非 root）
+    user: "1000:1000"
+    
+    # 卷挂载
+    volumes:
+      - type: bind
+        source: ./logs
+        target: /app/logs
+        read_only: false
+      - type: bind
+        source: ./config
+        target: /app/config
+        read_only: true
+    
+    # Secrets
+    secrets:
+      - api_key
+      - db_password
+    
+    # 网络
+    networks:
+      - frontend
+      - backend
+    
+    # 依赖
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    
+    # 日志配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service_name,environment"
+        env: "OS_VERSION"
+
+  # --------------------------------------------------------------------------
+  # PostgreSQL 数据库
+  # --------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    restart: unless-stopped
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    
+    environment:
+      - POSTGRES_USER=${DB_USER:-app}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:?DB_PASSWORD is required}
+      - POSTGRES_DB=${DB_NAME:-myapp}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d:ro
+    
+    # 生产环境不暴露端口，仅内部访问
+    # ports:
+    #   - "5432:5432"
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    
+    networks:
+      - backend
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # --------------------------------------------------------------------------
+  # Redis 缓存
+  # --------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    
+    # 使用配置文件
+    command: redis-server /usr/local/etc/redis/redis.conf --appendonly yes
+    
+    volumes:
+      - redis_data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    
+    networks:
+      - backend
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # --------------------------------------------------------------------------
+  # Nginx 反向代理
+  # --------------------------------------------------------------------------
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    restart: unless-stopped
+    
+    ports:
+      - "80:80"
+      - "443:443"
+    
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - ./nginx/html:/usr/share/nginx/html:ro
+    
+    depends_on:
+      - app
+    
+    networks:
+      - frontend
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # --------------------------------------------------------------------------
+  # 监控：Prometheus
+  # --------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    
+    # 生产环境使用 VPN 或反向代理访问
+    # ports:
+    #   - "9090:9090"
+    
+    networks:
+      - frontend
+      - backend
+
+  # --------------------------------------------------------------------------
+  # 监控：Grafana
+  # --------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    
+    # ports:
+    #   - "3000:3000"
+    
+    networks:
+      - frontend
+
+# --------------------------------------------------------------------------
+# Secrets（生产环境使用 Docker Secrets 或外部密钥管理）
+# --------------------------------------------------------------------------
+secrets:
+  api_key:
+    file: ./secrets/api_key.txt
+  db_password:
+    file: ./secrets/db_password.txt
+
+# --------------------------------------------------------------------------
+# 卷定义
+# --------------------------------------------------------------------------
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+# --------------------------------------------------------------------------
+# 网络定义
+# --------------------------------------------------------------------------
+networks:
+  frontend:
+    driver: bridge
+    internal: false
+  backend:
+    driver: bridge
+    internal: true  # 内部网络，无法从外部访问

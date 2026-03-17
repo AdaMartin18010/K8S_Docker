@@ -1,0 +1,72 @@
+# ============================================================================
+# 安全加固 Dockerfile 示例
+# 遵循 CIS Docker Benchmark 和 OWASP 容器安全指南
+# ============================================================================
+
+# syntax=docker/dockerfile:1.6
+
+# ----------------------------------------------------------------------------
+# 构建阶段
+# ----------------------------------------------------------------------------
+FROM golang:1.22-alpine3.19 AS builder
+
+WORKDIR /src
+
+# 安装编译依赖
+RUN apk add --no-cache git ca-certificates
+
+# 复制依赖
+COPY go.mod go.sum ./
+RUN go mod download
+
+# 复制源代码
+COPY . .
+
+# 编译
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags='-w -s -extldflags "-static"' \
+    -o /bin/app ./cmd/server
+
+# ----------------------------------------------------------------------------
+# 生产阶段 - 安全加固
+# ----------------------------------------------------------------------------
+FROM scratch
+
+# 元数据标签（安全审计需要）
+LABEL org.opencontainers.image.title="Secure App" \
+      org.opencontainers.image.description="Security hardened application" \
+      org.opencontainers.image.version="1.0.0" \
+      org.opencontainers.image.source="https://github.com/example/secure-app" \
+      org.opencontainers.image.documentation="https://docs.example.com" \
+      security.scan.date="2024-01-01" \
+      security.compliance="CIS-Docker-1.6.0"
+
+# 仅复制必要的 CA 证书（用于 HTTPS）
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
+# 复制编译好的二进制文件
+COPY --from=builder /bin/app /app
+
+# 创建非特权用户
+# 注意：scratch 镜像没有 /etc/passwd，需要在构建阶段创建
+COPY --from=builder /etc/passwd /etc/passwd
+COPY --from=builder /etc/group /etc/group
+
+# 使用非 root 用户（UID 65534 是 nobody）
+USER 65534:65534
+
+# 设置工作目录（不可写，防止恶意文件写入）
+WORKDIR /
+
+# 暴露应用端口
+EXPOSE 8080
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD ["/app", "health"]
+
+# 使用 exec 格式确保信号正确传递
+ENTRYPOINT ["/app"]
+
+# 不要设置 CMD，使用 ENTRYPOINT 足够
+# 不要包含敏感信息
