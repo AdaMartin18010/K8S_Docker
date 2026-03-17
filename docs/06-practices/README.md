@@ -9,8 +9,8 @@
 1. [CI/CD 实践](./cicd-guide.md)
 2. [性能调优](./performance-benchmarks.md)
 3. [故障排查](./debugging-guide.md)
-4. [混沌工程](./chaos-engineering/)
-5. [案例研究](./case-studies/)
+4. [混沌工程](./chaos-engineering/README.md)
+5. [案例研究](./case-studies/README.md)
 
 ---
 
@@ -78,5 +78,5 @@ jobs:
 
 ## 关联代码
 
-- [examples/ci-cd/](../../examples/ci-cd/)
-- [examples/helm-charts/](../../examples/helm-charts/)
+- [CI/CD 示例](../../examples/ci-cd/)
+- [Helm 示例](../../examples/helm/)
