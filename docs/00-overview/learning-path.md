@@ -104,7 +104,7 @@
 
 1. [Sidecar 模式](../05-patterns/sidecar-pattern.md)
 2. [微服务模式](../05-patterns/microservices.md)
-3. [部署策略](../05-patterns/deployment-strategies.md)
+3. [部署模式](../05-patterns/)
 4. [混沌工程](../06-practices/chaos-engineering/)
 
 ### 第三阶段：完整生态 (4 周)

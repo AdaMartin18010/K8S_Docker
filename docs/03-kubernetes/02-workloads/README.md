@@ -8,7 +8,7 @@
 
 1. [Pod 基础](../01-pod/sidecar-native.md)
 2. [工作负载配置](./README.md)
-3. [部署策略](../05-patterns/deployment-strategies.md)
+3. [部署策略](../../05-patterns/)
 
 ---
 
@@ -136,4 +136,4 @@ spec:
 ## 关联代码
 
 - [K8s 示例](../../examples/kubernetes/)
-- [部署示例](../../examples/kubernetes/)
+- [K8s 示例](../../examples/kubernetes/)

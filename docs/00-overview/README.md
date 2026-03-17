@@ -173,7 +173,7 @@ K8s 深度解析：
 
 - [Sidecar 模式](../05-patterns/sidecar-pattern.md)
 - [微服务模式](../05-patterns/microservices.md)
-- [部署策略](../05-patterns/deployment-strategies.md)
+- [部署模式](../05-patterns/)
 
 **目标读者**: 架构师、技术负责人
 

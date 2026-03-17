@@ -7,7 +7,7 @@
 ## 本章内容
 
 1. [安全概述](./README.md)
-2. [Dockerfile 安全](../02-docker/02-dockerfile/security.md)
+2. [Dockerfile 安全](../../02-docker/02-dockerfile/security.md)
 3. [供应链安全](../../04-ecosystem/supply-chain-security/)
 
 ---
@@ -103,4 +103,4 @@ roleRef:
 
 ## 关联代码
 
-- [安全示例](../../examples/kubernetes/)
+- [K8s 示例](../../examples/kubernetes/)

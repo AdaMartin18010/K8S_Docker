@@ -334,9 +334,9 @@ kubectl run -it --rm debug --image=nicolaka/netshoot --restart=Never -- sh
 │  └── [可观测性指南](../05-tools/observability/opentelemetry.md)             │
 │                                                                              │
 │  💻 动手实验                                                                 │
-│  ├── [部署微服务应用](../../examples/microservices-demo/)                       │
-│  ├── [配置 CI/CD 流水线](../../examples/ci-cd/)                                 │
-│  └── [混沌工程实验](../../examples/chaos-mesh/)                                 │
+│  ├── [部署微服务应用](../06-practices/)                       │
+│  ├── [CI/CD 指南](../06-practices/cicd-guide.md)                                 │
+│  └── [混沌工程](../06-practices/chaos-engineering/)                                 │
 │                                                                              │
 │  🎓 认证准备                                                                 │
 │  ├── CKA (K8s 管理员)                                                        │

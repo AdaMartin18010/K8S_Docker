@@ -263,7 +263,7 @@
 
 ## 🔗 相关资源
 
-- [更新日志](../CHANGELOG.md)
-- [贡献指南](../CONTRIBUTING.md)
+- [项目根目录](../../README.md)
+- [项目根目录](../../README.md)
 - [项目看板](https://github.com/orgs/xxx/projects/1)
 - [讨论区](https://github.com/xxx/discussions)

@@ -8,7 +8,7 @@
 
 1. [K8s 架构原理](./README.md)
 2. [K8s 1.33 新特性](../whats-new-1.33.md)
-3. [高级调度](../08-advanced-scheduling/README.md)
+3. [高级调度](../08-advanced-scheduling/)
 
 ---
 

@@ -1,7 +1,7 @@
 # Docker & Kubernetes 全景指南
 
-> **文档版本**: 3.0  
-> **最后更新**: 2025年3月  
+> **文档版本**: 3.0
+> **最后更新**: 2025年3月
 > **适用版本**: Docker 25.x+, Kubernetes 1.30-1.32
 
 ---
@@ -125,13 +125,14 @@ docs/
 
 1. **系统学习**: 按章节顺序阅读，配合代码实践
 2. **快速查阅**: 使用 [99-appendix/cheatsheets.md](./99-appendix/cheatsheets.md) 速查表
-3. **问题排查**: 参考 [06-practices/troubleshooting.md](./06-practices/troubleshooting.md)
+3. **问题排查**: 参考 [工程实践](./06-practices/)
 
 ---
 
 ## 📄 文档版本
 
 ### v3.0 (2025-03)
+
 - 重构为主题化组织结构
 - 对齐 2025 年最新技术标准
 - 保留原始内容到 `docs-backup/`
@@ -139,6 +140,7 @@ docs/
 ### 归档内容
 
 原始章节文件已归档到 `docs-backup/`:
+
 - `chapter1_architecture.md` - 架构详解
 - `chapter2_theory.md` - 数学理论
 - `chapter3_patterns.md` - 设计模式

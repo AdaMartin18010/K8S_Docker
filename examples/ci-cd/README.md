@@ -1,94 +1,53 @@
 # CI/CD 示例
 
-本目录包含持续集成和持续部署的配置示例。
+> 持续集成/持续交付流水线配置
+
+---
 
 ## GitHub Actions
 
-### 工作流文件
+### 可复用工作流
 
-| 文件 | 描述 |
-|------|------|
-| `docker-build.yml` | Docker 构建、扫描、推送 |
-| `k8s-deploy.yml` | 多环境 Kubernetes 部署 |
+- [Go 构建测试](./github-actions/reusable-workflows/go-build-test.yaml)
+- [Docker 构建推送](./github-actions/reusable-workflows/docker-build-push.yaml)
+- [K8s 部署](./github-actions/reusable-workflows/k8s-deploy.yaml)
 
-### 功能特性
+### 使用示例
 
-#### Docker 构建工作流
+```yaml
+# .github/workflows/main.yml
+name: CI/CD
 
-- ✅ 多架构构建（AMD64/ARM64）
-- ✅ BuildKit 缓存加速
-- ✅ Trivy 安全扫描
-- ✅ Docker Scout 分析
-- ✅ SBOM 和 Provenance 生成
-- ✅ 代码覆盖率报告
+on:
+  push:
+    branches: [main]
 
-#### Kubernetes 部署工作流
+jobs:
+  build:
+    uses: ./.github/workflows/go-build-test.yaml
+    with:
+      go-version: '1.23'
 
-- ✅ 多环境部署（开发/测试/生产）
-- ✅ Helm 部署
-- ✅ 金丝雀发布
-- ✅ 自动回滚
-- ✅ Slack 通知
+  docker:
+    needs: build
+    uses: ./.github/workflows/docker-build-push.yaml
+    with:
+      image-name: myapp
+      platforms: linux/amd64,linux/arm64
 
-## 使用指南
-
-### 设置 Secrets
-
-在 GitHub 仓库中设置以下 Secrets：
-
-```
-# 容器仓库
-GITHUB_TOKEN (自动提供)
-
-# AWS 凭证（如使用 EKS）
-AWS_ACCESS_KEY_ID
-AWS_SECRET_ACCESS_KEY
-
-# Kubernetes 配置
-KUBECONFIG_STAGING (base64 编码)
-KUBECONFIG_PRODUCTION (base64 编码)
-
-# 通知
-SLACK_WEBHOOK_URL
+  deploy:
+    needs: docker
+    uses: ./.github/workflows/k8s-deploy.yaml
+    with:
+      environment: production
+      namespace: default
+      image: ghcr.io/org/myapp
+      tag: ${{ github.sha }}
 ```
 
-### 目录结构
+---
 
-```
-.github/
-└── workflows/
-    ├── docker-build.yml      # 构建工作流
-    ├── k8s-deploy.yml        # 部署工作流
-    └── pr-check.yml          # PR 检查
-```
-
-## 最佳实践
-
-### 分支策略
-
-```
-main        → 生产环境
-develop     → 开发环境
-feature/*   → PR 检查
-```
-
-### 镜像标签策略
-
-- `latest` - 最新开发版本
-- `v1.0.0` - 语义化版本
-- `sha-xxxx` - Git commit SHA
-- `pr-123` - PR 编号
-
-### 安全实践
-
-1. **漏洞扫描**: 每次构建都扫描
-2. **最小权限**: 使用专用 Service Account
-3. **密钥管理**: 使用 GitHub Secrets
-4. **审计日志**: 记录所有部署
-
-## 其他 CI/CD 工具
-
-### GitLab CI
+## GitLab CI
 
 ```yaml
 # .gitlab-ci.yml
@@ -97,48 +56,30 @@ stages:
   - test
   - deploy
 
+variables:
+  DOCKER_IMAGE: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+
 build:
   stage: build
   script:
-    - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA .
-    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+    - docker build -t $DOCKER_IMAGE .
+    - docker push $DOCKER_IMAGE
+
+test:
+  stage: test
+  script:
+    - go test ./...
+
+deploy:
+  stage: deploy
+  script:
+    - kubectl set image deployment/myapp app=$DOCKER_IMAGE
+  only:
+    - main
 ```
 
-### Jenkins
+---
 
-```groovy
-// Jenkinsfile
-pipeline {
-    agent any
-    stages {
-        stage('Build') {
-            steps {
-                sh 'docker build -t myapp .'
-            }
-        }
-    }
-}
-```
+## 相关文档
 
-### Argo CD
-
-```yaml
-# Application 定义
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: web-app
-spec:
-  project: default
-  source:
-    repoURL: https://github.com/example/app
-    targetRevision: HEAD
-    path: k8s
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: production
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-```
+- [CI/CD 指南](../../docs/06-practices/cicd-guide.md)

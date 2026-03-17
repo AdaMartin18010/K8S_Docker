@@ -68,4 +68,4 @@ docker scout cves myapp:v1.0.0
 
 ## 关联代码
 
-- [examples/docker/security/](../../examples/docker/security/)
+- [Docker 示例](../../examples/docker/)
