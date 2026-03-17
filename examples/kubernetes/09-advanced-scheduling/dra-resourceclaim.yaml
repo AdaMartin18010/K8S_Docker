@@ -1,0 +1,38 @@
+# DRA (Dynamic Resource Allocation) ResourceClaim 示例
+# Kubernetes 1.32+ 新特性
+
+apiVersion: resource.k8s.io/v1beta1
+kind: ResourceClaim
+metadata:
+  name: gpu-claim-for-training
+  namespace: default
+spec:
+  resourceClassName: nvidia-gpu
+  parameters:
+    apiVersion: gpu.resource.nvidia.com/v1alpha1
+    kind: GpuClaimParameters
+    count: 2
+    selector:
+      productName: "NVIDIA A100"
+      memory: "40Gi"
+    sharing:
+      strategy: TimeSlicing
+---
+# Pod 使用 ResourceClaim
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ml-training-dra
+  namespace: default
+spec:
+  containers:
+    - name: trainer
+      image: pytorch/pytorch:2.2.0-cuda12.1-cudnn8-runtime
+      command: ["python", "train.py"]
+      resources:
+        claims:
+          - name: gpu
+  resourceClaims:
+    - name: gpu
+      source:
+        resourceClaimName: gpu-claim-for-training

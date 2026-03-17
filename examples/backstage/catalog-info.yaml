@@ -1,0 +1,35 @@
+# Backstage 实体定义示例
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: order-service
+  description: Order processing microservice
+  annotations:
+    github.com/project-slug: myorg/order-service
+    backstage.io/techdocs-ref: dir:.
+    argocd/app-name: order-service
+  tags:
+    - go
+    - microservice
+spec:
+  type: service
+  lifecycle: production
+  owner: orders-team
+  system: ecommerce
+  dependsOn:
+    - component:database/orders-db
+  providesApis:
+    - order-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: order-api
+  description: Order management API
+spec:
+  type: openapi
+  lifecycle: production
+  owner: orders-team
+  system: ecommerce
+  definition:
+    $text: https://github.com/myorg/order-service/blob/main/api/openapi.yaml

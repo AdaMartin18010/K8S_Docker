@@ -1,0 +1,88 @@
+# ApplicationSet - Cluster Generator 示例
+# 适用于：动态集群环境，自动为新注册集群创建应用
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: monitoring-stack
+  namespace: argocd
+spec:
+  generators:
+  # 自动发现所有注册到 ArgoCD 的集群
+  - clusters:
+      # 只选择带有 monitoring: enabled 标签的集群
+      selector:
+        matchLabels:
+          monitoring: enabled
+      # 也可以按名称过滤
+      # names:
+      # - prod-*
+  template:
+    metadata:
+      name: 'monitoring-{{name}}'
+      labels:
+        component: monitoring
+        cluster: '{{name}}'
+      annotations:
+        notifications.argoproj.io/subscribe.on-sync-succeeded.slack: alerts
+    spec:
+      project: infrastructure
+      source:
+        repoURL: https://github.com/example/gitops-repo.git
+        targetRevision: main
+        path: monitoring/base
+        kustomize:
+          commonLabels:
+            cluster: '{{name}}'
+          images:
+          - name: prometheus
+            newTag: v2.50.0
+      destination:
+        server: '{{server}}'
+        namespace: monitoring
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=true
+        - ServerSideApply=true
+---
+# 另一个示例：只为生产集群部署
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: production-only-apps
+  namespace: argocd
+spec:
+  generators:
+  - clusters:
+      selector:
+        matchLabels:
+          environment: production
+          # 排除特定集群
+        matchExpressions:
+        - key: maintenance
+          operator: NotIn
+          values: ["true"]
+  template:
+    metadata:
+      name: 'backup-agent-{{name}}'
+    spec:
+      project: production
+      source:
+        repoURL: https://github.com/example/gitops-repo.git
+        targetRevision: main
+        path: backup-agent
+        helm:
+          parameters:
+          - name: clusterName
+            value: '{{name}}'
+          - name: backupSchedule
+            value: "0 2 * * *"  # 每天凌晨 2 点
+      destination:
+        server: '{{server}}'
+        namespace: backup
+      syncPolicy:
+        automated:
+          prune: false  # 生产环境谨慎删除
+          selfHeal: true

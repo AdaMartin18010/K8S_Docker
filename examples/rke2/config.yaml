@@ -1,0 +1,99 @@
+# RKE2 配置文件 /etc/rancher/rke2/config.yaml
+# CIS 加固生产环境配置
+
+# 服务器地址（用于高可用）
+server: https://192.168.1.100:9345
+token: ${RKE2_CLUSTER_TOKEN}
+
+# TLS 备选名称
+tls-san:
+  - 192.168.1.100
+  - rke2-cluster.example.com
+  - rke2-api.example.com
+
+# 禁用默认组件（使用外部组件）
+disable:
+  - rke2-ingress-nginx
+  - rke2-metrics-server
+
+# CNI 配置
+cni:
+  - canal
+  # 或: - calico, - cilium
+
+# 网络配置
+cluster-cidr: 10.42.0.0/16
+service-cidr: 10.43.0.0/16
+cluster-dns: 10.43.0.10
+cluster-domain: cluster.local
+service-node-port-range: 30000-32767
+
+# Kubelet 配置（CIS 加固）
+kubelet-arg:
+  - "protect-kernel-defaults=true"
+  - "read-only-port=0"
+  - "streaming-connection-idle-timeout=5m"
+  - "make-iptables-util-chains=true"
+  - "event-qps=0"
+  - "tls-cipher-suites=TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+
+# API Server 配置（CIS 加固）
+kube-apiserver-arg:
+  - "authorization-mode=Node,RBAC"
+  - "audit-log-path=/var/log/rke2/audit/audit.log"
+  - "audit-log-maxage=30"
+  - "audit-log-maxbackup=10"
+  - "audit-log-maxsize=100"
+  - "audit-log-format=json"
+  - "audit-policy-file=/etc/rke2/audit-policy.yaml"
+  - "request-timeout=300s"
+  - "service-account-lookup=true"
+  - "enable-admission-plugins=NodeRestriction,PodSecurityPolicy,ResourceQuota"
+  - "tls-cipher-suites=TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+  - "encryption-provider-config=/etc/rke2/encryption-config.yaml"
+
+# Controller Manager 配置（CIS 加固）
+kube-controller-manager-arg:
+  - "terminated-pod-gc-threshold=10"
+  - "profiling=false"
+  - "use-service-account-credentials=true"
+  - "tls-cipher-suites=TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+
+# Scheduler 配置（CIS 加固）
+kube-scheduler-arg:
+  - "profiling=false"
+  - "tls-cipher-suites=TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+
+# Etcd 配置
+etcd-arg:
+  - "client-cert-auth=true"
+  - "peer-client-cert-auth=true"
+  - "auto-tls=false"
+  - "peer-auto-tls=false"
+
+# etcd 快照配置
+etcd-snapshot-schedule-cron: "0 */6 * * *"
+etcd-snapshot-retention: 20
+etcd-s3: true
+etcd-s3-endpoint: "s3.us-gov-west-1.amazonaws.com"  # GovCloud
+etcd-s3-bucket: "rke2-etcd-backups"
+etcd-s3-region: "us-gov-west-1"
+etcd-s3-access-key: "${AWS_ACCESS_KEY_ID}"
+etcd-s3-secret-key: "${AWS_SECRET_ACCESS_KEY}"
+
+# 云提供商（可选）
+cloud-provider-name: "aws"
+cloud-provider-config: "/etc/rke2/cloud-config.yaml"
+
+# 镜像仓库配置
+# private-registry: "/etc/rke2/registries.yaml"
+
+# SELinux
+selinux: true
+
+# FIPS 模式
+fips: true  # 启用 FIPS 140-2 合规模式
+
+# 性能调优
+disable-scheduler: false
+disable-cloud-controller: false

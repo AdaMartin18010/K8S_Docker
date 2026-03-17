@@ -1,0 +1,43 @@
+# Knative Service 示例
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: hello-world
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "100"
+    spec:
+      containers:
+        - image: gcr.io/knative-samples/helloworld-go
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TARGET
+              value: "World"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+---
+# 流量分割示例
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: hello-canary
+spec:
+  template:
+    metadata:
+      name: hello-canary-v2
+    spec:
+      containers:
+        - image: gcr.io/knative-samples/helloworld-go:v2
+  traffic:
+    - tag: stable
+      revisionName: hello-canary-v1
+      percent: 90
+    - tag: canary
+      revisionName: hello-canary-v2
+      percent: 10

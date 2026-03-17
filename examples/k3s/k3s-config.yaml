@@ -1,0 +1,62 @@
+# K3s 服务器配置文件 /etc/rancher/k3s/config.yaml
+# 用于生产环境的高可用配置
+
+# 外部数据库配置（用于高可用）
+datastore-endpoint: "postgres://k3s:password@postgres:5432/k3s"
+
+# TLS SAN 配置
+tls-san:
+  - 192.168.1.100  # 负载均衡器 IP
+  - k3s-cluster.example.com
+  - k3s-server-1.example.com
+
+# 禁用默认组件（如果使用外部组件）
+disable:
+  - traefik  # 使用自定义 Ingress
+  - servicelb  # 使用 MetalLB
+
+# Kubelet 配置
+kubelet-arg:
+  - "eviction-hard=memory.available<500Mi,nodefs.available<10%"
+  - "system-reserved=cpu=500m,memory=512Mi"
+  - "kube-reserved=cpu=500m,memory=512Mi"
+
+# API Server 配置
+kube-apiserver-arg:
+  - "audit-log-path=/var/log/k3s/audit.log"
+  - "audit-log-maxage=30"
+  - "audit-log-maxbackup=10"
+  - "audit-policy-file=/etc/rancher/k3s/audit.yaml"
+
+# Controller Manager 配置
+kube-controller-manager-arg:
+  - "node-monitor-grace-period=40s"
+  - "pod-eviction-timeout=5m0s"
+
+# Scheduler 配置
+kube-scheduler-arg:
+  - "bind-address=127.0.0.1"
+
+# 网络配置
+flannel-backend: vxlan  # 或 wireguard, ipsec
+cluster-cidr: 10.42.0.0/16
+service-cidr: 10.43.0.0/16
+cluster-dns: 10.43.0.10
+cluster-domain: cluster.local
+
+# Secrets 加密
+csecrets-encryption: true
+
+# 嵌入式 etcd 快照配置（当使用嵌入式 etcd 时）
+etcd-snapshot-schedule-cron: "0 */12 * * *"
+etcd-snapshot-retention: 5
+etcd-s3: true
+etcd-s3-endpoint: "s3.amazonaws.com"
+etcd-s3-bucket: "k3s-etcd-snapshots"
+etcd-s3-region: "us-west-2"
+etcd-s3-access-key: "${AWS_ACCESS_KEY_ID}"
+etcd-s3-secret-key: "${AWS_SECRET_ACCESS_KEY}"
+
+# Agent 配置（仅 agent 节点）
+# server: https://192.168.1.100:6443
+# token: <cluster-token>

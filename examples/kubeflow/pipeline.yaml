@@ -1,0 +1,213 @@
+# Kubeflow Pipeline 示例
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ml-pipeline
+  namespace: kubeflow
+data:
+  pipeline.py: |
+    from kfp import dsl
+    from kfp.dsl import Input, Output, Dataset, Model, Metrics
+    
+    @dsl.component(
+        base_image="python:3.10",
+        packages_to_install=["pandas", "scikit-learn"]
+    )
+    def preprocess(
+        input_data: Input[Dataset],
+        output_data: Output[Dataset],
+        message: str
+    ):
+        import pandas as pd
+        from sklearn.preprocessing import StandardScaler
+        
+        print(f"Processing: {message}")
+        df = pd.read_csv(input_data.path)
+        scaler = StandardScaler()
+        df_scaled = scaler.fit_transform(df)
+        pd.DataFrame(df_scaled).to_csv(output_data.path, index=False)
+    
+    @dsl.component(
+        base_image="python:3.10",
+        packages_to_install=["scikit-learn", "joblib"]
+    )
+    def train_model(
+        training_data: Input[Dataset],
+        model: Output[Model],
+        metrics: Output[Metrics]
+    ):
+        import joblib
+        import json
+        from sklearn.ensemble import RandomForestClassifier
+        from sklearn.model_selection import train_test_split
+        import pandas as pd
+        
+        df = pd.read_csv(training_data.path)
+        X, y = df.drop('target', axis=1), df['target']
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+        
+        clf = RandomForestClassifier(n_estimators=100)
+        clf.fit(X_train, y_train)
+        
+        accuracy = clf.score(X_test, y_test)
+        metrics.log_metric("accuracy", accuracy)
+        
+        joblib.dump(clf, model.path)
+    
+    @dsl.pipeline(
+        name="ML Training Pipeline",
+        description="End-to-end ML training with Kubeflow"
+    )
+    def ml_pipeline(
+        data_url: str = "gs://bucket/dataset.csv"
+    ):
+        preprocess_task = preprocess(
+            input_data=dsl.importer(
+                artifact_uri=data_url,
+                artifact_class=Dataset
+            ).output,
+            message="Starting preprocessing"
+        )
+        
+        train_task = train_model(
+            training_data=preprocess_task.outputs['output_data']
+        )
+        
+        with dsl.Condition(train_task.outputs['metrics'].accuracy > 0.8):
+            deploy_op = dsl.ContainerOp(
+                name='deploy',
+                image='myregistry/deploy:v1',
+                arguments=['--model', train_task.outputs['model'].uri]
+            )
+---
+# Katib 超参优化
+apiVersion: kubeflow.org/v1beta1
+kind: Experiment
+metadata:
+  name: hyperparam-tuning
+  namespace: kubeflow
+spec:
+  parallelTrialCount: 3
+  maxTrialCount: 12
+  maxFailedTrialCount: 3
+  objective:
+    type: maximize
+    goal: 0.99
+    objectiveMetricName: accuracy
+  algorithm:
+    algorithmName: bayesianoptimization
+  parameters:
+  - name: learning_rate
+    parameterType: double
+    feasibleSpace:
+      min: "0.01"
+      max: "0.1"
+  - name: batch_size
+    parameterType: categorical
+    feasibleSpace:
+      list:
+      - "32"
+      - "64"
+      - "128"
+  trialTemplate:
+    primaryContainerName: training-container
+    trialParameters:
+    - name: learningRate
+      reference: learning_rate
+    - name: batchSize
+      reference: batch_size
+    trialSpec:
+      apiVersion: batch/v1
+      kind: Job
+      spec:
+        template:
+          spec:
+            containers:
+            - name: training-container
+              image: myregistry/ml-training:v1
+              command:
+              - python
+              - train.py
+              - --lr=${trialParameters.learningRate}
+              - --batch-size=${trialParameters.batchSize}
+            restartPolicy: Never
+---
+# KServe InferenceService
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: sklearn-iris
+  namespace: production
+spec:
+  predictor:
+    minReplicas: 1
+    maxReplicas: 10
+    sklearn:
+      protocolVersion: v1
+      storageUri: "gs://kfserving-examples/models/sklearn/1.0/model"
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 1000m
+          memory: 1Gi
+---
+# GPU 推理服务
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: llm-gpt
+  namespace: production
+spec:
+  predictor:
+    model:
+      modelFormat:
+        name: huggingface
+      storageUri: "gs://models/llama-3-8b"
+      resources:
+        limits:
+          nvidia.com/gpu: 2
+        requests:
+          nvidia.com/gpu: 2
+    nodeSelector:
+      node-type: gpu-a100
+---
+# PyTorch 分布式训练
+apiVersion: kubeflow.org/v1
+kind: PyTorchJob
+metadata:
+  name: pytorch-distributed
+  namespace: kubeflow
+spec:
+  pytorchReplicaSpecs:
+    Master:
+      replicas: 1
+      restartPolicy: OnFailure
+      template:
+        spec:
+          containers:
+          - name: pytorch
+            image: myregistry/pytorch-training:v1
+            command:
+            - python
+            - train.py
+            - --backend=nccl
+            resources:
+              limits:
+                nvidia.com/gpu: 4
+    Worker:
+      replicas: 3
+      restartPolicy: OnFailure
+      template:
+        spec:
+          containers:
+          - name: pytorch
+            image: myregistry/pytorch-training:v1
+            command:
+            - python
+            - train.py
+            - --backend=nccl
+            resources:
+              limits:
+                nvidia.com/gpu: 4

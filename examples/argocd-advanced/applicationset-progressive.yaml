@@ -1,0 +1,157 @@
+# ApplicationSet - 渐进式发布 (Progressive Rollout)
+# 使用 RollingSync 策略分批次部署
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: progressive-deployment
+  namespace: argocd
+spec:
+  generators:
+  - list:
+      elements:
+      # 第1批：金丝雀环境
+      - cluster: canary
+        wave: "1"
+        region: us-east
+        replicas: "1"
+      # 第2批：Beta 测试环境
+      - cluster: beta
+        wave: "2"
+        region: us-west
+        replicas: "2"
+      # 第3批：生产环境 - 第1区域组
+      - cluster: prod-us-east-1
+        wave: "3"
+        region: us-east
+        replicas: "10"
+      - cluster: prod-us-east-2
+        wave: "3"
+        region: us-east
+        replicas: "10"
+      # 第4批：生产环境 - 第2区域组
+      - cluster: prod-us-west-1
+        wave: "4"
+        region: us-west
+        replicas: "10"
+      - cluster: prod-us-west-2
+        wave: "4"
+        region: us-west
+        replicas: "10"
+      # 第5批：关键客户区域（最后部署）
+      - cluster: prod-eu-central
+        wave: "5"
+        region: eu-central
+        replicas: "15"
+  # 渐进式发布策略
+  strategy:
+    type: RollingSync
+    rollingSync:
+      steps:
+      # 第1步：部署金丝雀
+      - matchExpressions:
+        - key: wave
+          operator: In
+          values: ["1"]
+        # 等待验证的最大时间
+        maxUpdate: 1
+      # 第2步：Beta 验证
+      - matchExpressions:
+        - key: wave
+          operator: In
+          values: ["2"]
+        maxUpdate: 1
+      # 第3步：生产区域组 1
+      - matchExpressions:
+        - key: wave
+          operator: In
+          values: ["3"]
+        maxUpdate: 2  # 并行部署 2 个集群
+      # 第4步：生产区域组 2
+      - matchExpressions:
+        - key: wave
+          operator: In
+          values: ["4"]
+        maxUpdate: 2
+      # 第5步：关键区域
+      - matchExpressions:
+        - key: wave
+          operator: In
+          values: ["5"]
+        maxUpdate: 1  # 逐个部署
+  template:
+    metadata:
+      name: 'myapp-{{cluster}}'
+      labels:
+        app: myapp
+        cluster: '{{cluster}}'
+        wave: '{{wave}}'
+        region: '{{region}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/example/gitops-repo.git
+        targetRevision: main
+        path: helm/myapp
+        helm:
+          parameters:
+          - name: replicaCount
+            value: '{{replicas}}'
+          - name: deployment.wave
+            value: '{{wave}}'
+          - name: region
+            value: '{{region}}'
+      destination:
+        server: '{{url}}'
+        namespace: myapp
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        retry:
+          limit: 5
+---
+# 发布门控 - 需要手动批准才能继续
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: gated-deployment
+  namespace: argocd
+spec:
+  generators:
+  - list:
+      elements:
+      - cluster: staging
+        stage: canary
+        gate: "0"  # 自动部署
+      - cluster: prod-1
+        stage: production
+        gate: "1"  # 需要手动批准
+      - cluster: prod-2
+        stage: production
+        gate: "1"
+  strategy:
+    type: RollingSync
+    rollingSync:
+      steps:
+      - matchExpressions:
+        - key: gate
+          operator: In
+          values: ["0"]
+      - matchExpressions:
+        - key: gate
+          operator: In
+          values: ["1"]
+  template:
+    metadata:
+      name: 'gated-app-{{cluster}}'
+      labels:
+        gate: '{{gate}}'
+        stage: '{{stage}}'
+    spec:
+      source:
+        repoURL: https://github.com/example/gitops-repo.git
+        targetRevision: main
+        path: app/
+      destination:
+        server: '{{url}}'
+        namespace: app

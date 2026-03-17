@@ -1,0 +1,151 @@
+# SPIRE Agent DaemonSet - 部署到每个节点
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spire-agent-config
+  namespace: spire
+data:
+  agent.conf: |
+    agent {
+      data_dir = "/run/spire"
+      log_level = "INFO"
+      trust_domain = "company.com"
+      server_address = "spire-server"
+      server_port = "8081"
+      socket_path = "/run/spire/sockets/agent.sock"
+      insecure_bootstrap = false
+      
+      # 自动 SVID 轮换
+      svid_store_cache_ttl = "1h"
+    }
+    
+    plugins {
+      # 节点证明
+      NodeAttestor "k8s_psat" {
+        plugin_data {
+          cluster = "my-cluster"
+          token_path = "/var/run/secrets/tokens/spire-agent"
+        }
+      }
+      
+      # 工作负载证明
+      WorkloadAttestor "k8s" {
+        plugin_data {
+          skip_kubelet_verification = true
+        }
+      }
+    }
+    
+    health_checks {
+      listener_enabled = true
+      bind_address = "0.0.0.0"
+      bind_port = "8080"
+    }
+---
+# SPIRE Agent ServiceAccount
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: spire-agent
+  namespace: spire
+---
+# 为 SPIRE Agent 创建 Projected Service Account Token
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: spire-agent-cluster-role
+rules:
+- apiGroups: [""]
+  resources: ["pods","nodes"]
+  verbs: ["get","list"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get","list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: spire-agent-cluster-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: spire-agent-cluster-role
+subjects:
+- kind: ServiceAccount
+  name: spire-agent
+  namespace: spire
+---
+# SPIRE Agent DaemonSet
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: spire-agent
+  namespace: spire
+  labels:
+    app: spire-agent
+spec:
+  selector:
+    matchLabels:
+      app: spire-agent
+  template:
+    metadata:
+      labels:
+        app: spire-agent
+    spec:
+      hostPID: true
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      serviceAccountName: spire-agent
+      initContainers:
+      # 等待 SPIRE Server 就绪
+      - name: init
+        image: busybox:latest
+        command: ['sh', '-c', 'until nc -z spire-server 8081; do echo waiting for spire-server...; sleep 1; done;']
+      containers:
+      - name: spire-agent
+        image: ghcr.io/spiffe/spire-agent:1.9.0
+        args:
+        - -config
+        - /run/spire/config/agent.conf
+        volumeMounts:
+        - name: spire-config
+          mountPath: /run/spire/config
+          readOnly: true
+        - name: spire-agent-socket
+          mountPath: /run/spire/sockets
+        - name: spire-token
+          mountPath: /var/run/secrets/tokens
+        - name: proc
+          mountPath: /host/proc
+          readOnly: true
+        livenessProbe:
+          httpGet:
+            path: /live
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 60
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: spire-config
+        configMap:
+          name: spire-agent-config
+      - name: spire-agent-socket
+        hostPath:
+          path: /run/spire/sockets
+          type: DirectoryOrCreate
+      - name: proc
+        hostPath:
+          path: /proc
+      - name: spire-token
+        projected:
+          sources:
+          - serviceAccountToken:
+              path: spire-agent
+              audience: spire-server
+              expirationSeconds: 7200

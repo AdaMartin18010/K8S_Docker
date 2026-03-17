@@ -1,0 +1,18 @@
+# Docker Compose 运行 WebAssembly 服务
+version: "3"
+
+services:
+  wasm-http:
+    image: myapp:wasm-latest
+    platform: wasi/wasm
+    runtime: io.containerd.wasmedge.v1
+    ports:
+      - "8080:8080"
+    environment:
+      - RUST_LOG=info
+    
+  wasm-function:
+    image: myfunc:wasm-latest
+    platform: wasi/wasm32
+    runtime: io.containerd.spin.v1
+    command: ["--listen", "0.0.0.0:3000"]

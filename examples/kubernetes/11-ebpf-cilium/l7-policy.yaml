@@ -1,0 +1,79 @@
+# Cilium L7 网络策略示例
+# 基于 eBPF 的应用层访问控制
+
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: http-api-policy
+  namespace: production
+spec:
+  endpointSelector:
+    matchLabels:
+      app: frontend
+  egress:
+    # 允许访问后端 API
+    - toEndpoints:
+        - matchLabels:
+            app: backend
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+          rules:
+            http:
+              - method: GET
+                path: "/api/v1/users/.*"
+                headers:
+                  - name: X-Request-ID
+                    presence: true
+              - method: POST
+                path: "/api/v1/orders"
+              - method: GET
+                path: "/health"
+---
+# gRPC 访问控制
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: grpc-policy
+  namespace: production
+spec:
+  endpointSelector:
+    matchLabels:
+      app: order-service
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app: payment-service
+      toPorts:
+        - ports:
+            - port: "50051"
+              protocol: TCP
+          rules:
+            http:
+              - method: POST
+                path: "/pb.Payment/Process"
+---
+# Kafka 访问控制
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: kafka-policy
+spec:
+  endpointSelector:
+    matchLabels:
+      app: analytics-consumer
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            app: kafka
+      toPorts:
+        - ports:
+            - port: "9092"
+              protocol: TCP
+          rules:
+            kafka:
+              - role: consumer
+                topic: user-events
+              - role: consumer
+                topic: order-events

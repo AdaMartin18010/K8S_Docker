@@ -1,0 +1,86 @@
+# ApplicationSet - List Generator 示例
+# 适用于：已知固定集群列表，需要为每个集群自定义参数
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: myapp-list
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+  - list:
+      elements:
+      - cluster: prod-east
+        url: https://prod-east.example.com
+        region: eastus
+        replicas: "5"
+        resources: "large"
+        environment: production
+      - cluster: prod-west
+        url: https://prod-west.example.com
+        region: westus2
+        replicas: "5"
+        resources: "large"
+        environment: production
+      - cluster: staging
+        url: https://staging.example.com
+        region: centralus
+        replicas: "1"
+        resources: "small"
+        environment: staging
+      - cluster: dev
+        url: https://dev.example.com
+        region: centralus
+        replicas: "1"
+        resources: "small"
+        environment: development
+  template:
+    metadata:
+      name: 'myapp-{{.cluster}}'
+      labels:
+        app: myapp
+        environment: '{{.environment}}'
+        region: '{{.region}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/example/gitops-repo.git
+        targetRevision: main
+        path: helm/myapp
+        helm:
+          valueFiles:
+          - values.yaml
+          - 'values-{{.environment}}.yaml'
+          parameters:
+          - name: replicaCount
+            value: '{{.replicas}}'
+          - name: region
+            value: '{{.region}}'
+          - name: environment
+            value: '{{.environment}}'
+          - name: resourcesPreset
+            value: '{{.resources}}'
+      destination:
+        server: '{{.url}}'
+        namespace: myapp
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+          allowEmpty: false
+        syncOptions:
+        - CreateNamespace=true
+        - PrunePropagationPolicy=foreground
+        - PruneLast=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
+      ignoreDifferences:
+      - group: apps
+        kind: Deployment
+        jsonPointers:
+        - /spec/replicas

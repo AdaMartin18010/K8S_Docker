@@ -1,0 +1,59 @@
+# vLLM Kubernetes 部署
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-llama
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-llama
+  template:
+    metadata:
+      labels:
+        app: vllm-llama
+    spec:
+      nodeSelector:
+        nvidia.com/gpu.present: "true"
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:latest
+          args:
+            - --model
+            - meta-llama/Llama-3.1-8B-Instruct
+            - --max-model-len
+            - "4096"
+            - --gpu-memory-utilization
+            - "0.9"
+            - --dtype
+            - float16
+          ports:
+            - containerPort: 8000
+              name: http
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+              memory: 24Gi
+            requests:
+              nvidia.com/gpu: 1
+              memory: 24Gi
+          volumeMounts:
+            - name: model-cache
+              mountPath: /root/.cache/huggingface
+      volumes:
+        - name: model-cache
+          hostPath:
+            path: /opt/models
+            type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-service
+spec:
+  selector:
+    app: vllm-llama
+  ports:
+    - port: 8000
+      targetPort: 8000
+  type: ClusterIP

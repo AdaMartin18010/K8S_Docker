@@ -1,0 +1,46 @@
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: daily-backup
+  namespace: velero
+spec:
+  schedule: "0 2 * * *"
+  template:
+    includedNamespaces:
+    - production
+    - staging
+    includedResources:
+    - '*'
+    excludedResources:
+    - events
+    - pods
+    snapshotVolumes: true
+    ttl: 720h0m0s
+    storageLocation: default
+    volumeSnapshotLocations:
+    - aws-default
+---
+apiVersion: velero.io/v1
+kind: Backup
+metadata:
+  name: nginx-backup
+  namespace: velero
+spec:
+  includedNamespaces:
+  - nginx
+  snapshotVolumes: true
+  storageLocation: default
+  volumeSnapshotLocations:
+  - aws-default
+  ttl: 720h0m0s
+  hooks:
+    resources:
+    - name: mysql-hooks
+      includedNamespaces:
+      - mysql
+      pre:
+      - exec:
+          container: mysql
+          command: ["/bin/sh", "-c", "mysqldump --all-databases > /tmp/pre-backup.sql"]
+          onError: Fail
+          timeout: 5m

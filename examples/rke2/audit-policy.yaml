@@ -1,0 +1,89 @@
+# RKE2 审计策略配置
+# 路径: /etc/rke2/audit-policy.yaml
+# 参考: CIS Kubernetes Benchmark v1.8
+
+apiVersion: audit.k8s.io/v1
+kind: Policy
+rules:
+# 记录所有身份验证和授权事件
+- level: Metadata
+  verbs: ["create", "update", "delete", "patch"]
+  resources:
+  - group: "authentication.k8s.io"
+    resources: ["tokenreviews"]
+  - group: "authorization.k8s.io"
+    resources: ["subjectaccessreviews", "selfsubjectaccessreviews"]
+  omitStages:
+  - RequestReceived
+
+# 记录敏感资源的所有操作（RequestResponse 级别）
+- level: RequestResponse
+  verbs: ["create", "update", "delete", "patch"]
+  resources:
+  # Secrets
+  - group: ""
+    resources: ["secrets", "configmaps"]
+  # RBAC 资源
+  - group: "rbac.authorization.k8s.io"
+    resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+  # 服务账号
+  - group: ""
+    resources: ["serviceaccounts"]
+  # 网络策略
+  - group: "networking.k8s.io"
+    resources: ["networkpolicies"]
+  # Pod 安全策略
+  - group: "policy"
+    resources: ["podsecuritypolicies"]
+  omitStages:
+  - RequestReceived
+
+# 记录对 kube-system 命名空间的操作
+- level: RequestResponse
+  namespaces: ["kube-system"]
+  omitStages:
+  - RequestReceived
+
+# 记录特权容器的创建
+- level: RequestResponse
+  verbs: ["create", "update"]
+  resources:
+  - group: ""
+    resources: ["pods", "pods/status"]
+  omitStages:
+  - RequestReceived
+
+# 记录所有用户的登录和注销
+- level: Metadata
+  nonResourceURLs:
+  - /login*
+  - /logout*
+  - /oidc*
+  omitStages:
+  - RequestReceived
+
+# 记录匿名访问
+- level: Metadata
+  users: ["system:anonymous"]
+  omitStages:
+  - RequestReceived
+
+# 记录特权用户操作
+- level: RequestResponse
+  userGroups: ["system:masters"]
+  omitStages:
+  - RequestReceived
+
+# 记录对审计策略本身的访问
+- level: Metadata
+  verbs: ["get", "list", "watch"]
+  resources:
+  - group: "audit.k8s.io"
+    resources: ["*"]
+  omitStages:
+  - RequestReceived
+
+# 默认规则：记录元数据
+- level: Metadata
+  omitStages:
+  - RequestReceived

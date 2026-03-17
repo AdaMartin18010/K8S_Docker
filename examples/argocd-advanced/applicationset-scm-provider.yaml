@@ -1,0 +1,129 @@
+# ApplicationSet - SCM Provider Generator
+# 为每个 Pull Request 自动创建预览环境
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: pr-previews
+  namespace: argocd
+spec:
+  generators:
+  - scmProvider:
+      github:
+        # GitHub 组织/用户
+        organization: example-org
+        # 可选：指定仓库
+        repositories:
+        - myapp-backend
+        - myapp-frontend
+        # 使用 GitHub App 认证
+        appSecretName: github-app-secret
+        # 或 Token 认证
+        # tokenRef:
+        #   secretName: github-token
+        #   key: token
+      # 只处理特定分支的 PR
+      filters:
+      - branchMatch: "^feature/.*"
+      - labelMatch: "preview"  # 只处理带 preview 标签的 PR
+      # 克隆协议
+      cloneProtocol: https
+  template:
+    metadata:
+      name: 'preview-{{repository}}-pr{{number}}'
+      labels:
+        app: '{{repository}}'
+        pr: '{{number}}'
+        author: '{{author}}'
+        type: preview
+      annotations:
+        # 在 UI 中显示 PR 链接
+        link.argocd.argoproj.io/external-link: '{{url}}'
+    spec:
+      project: previews
+      source:
+        repoURL: '{{url}}'
+        # 使用 PR 的最新提交
+        targetRevision: '{{head_sha}}'
+        path: helm/{{repository}}
+        helm:
+          parameters:
+          # 使用 PR 构建的镜像
+          - name: image.tag
+            value: 'pr-{{number}}-{{head_short_sha}}'
+          # 预览环境特定配置
+          - name: ingress.host
+            value: '{{repository}}-pr-{{number}}.preview.example.com'
+          - name: replicaCount
+            value: "1"
+          - name: resourcesPreset
+            value: "small"
+          - name: environment
+            value: "preview"
+          - name: pr.number
+            value: '{{number}}'
+          - name: pr.branch
+            value: '{{branch}}'
+          - name: pr.author
+            value: '{{author}}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: 'preview-{{repository}}-pr{{number}}'
+      syncPolicy:
+        automated:
+          prune: true  # PR 合并后自动删除预览环境
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=true
+        - PruneLast=true
+        managedNamespaceMetadata:
+          labels:
+            # 用于资源配额
+            purpose: preview
+            pr: '{{number}}'
+          annotations:
+            pr-author: '{{author}}'
+            pr-branch: '{{branch}}'
+            created-by: argocd-applicationset
+---
+# 多个 SCM 提供商支持
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: multi-scm-previews
+  namespace: argocd
+spec:
+  generators:
+  # GitHub PR
+  - scmProvider:
+      github:
+        organization: github-org
+        allBranches: false
+      filters:
+      - labelMatch: "deploy-preview"
+  # GitLab MR  
+  - scmProvider:
+      gitlab:
+        group: gitlab-group
+        api: https://gitlab.example.com
+        tokenRef:
+          secretName: gitlab-token
+          key: token
+      filters:
+      - branchMatch: "^preview/.*"
+  # Bitbucket PR
+  - scmProvider:
+      bitbucket:
+        owner: bitbucket-team
+        user: ci-user
+        appSecretName: bitbucket-oauth
+  template:
+    metadata:
+      name: 'preview-{{repository}}-{{number}}'
+    spec:
+      source:
+        repoURL: '{{url}}'
+        targetRevision: '{{head_sha}}'
+        path: ./
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: 'previews'

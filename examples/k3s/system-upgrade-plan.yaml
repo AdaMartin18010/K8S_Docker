@@ -1,0 +1,142 @@
+# K3s 自动升级计划
+# 需要安装 system-upgrade-controller: https://github.com/rancher/system-upgrade-controller
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: system-upgrade
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: system-upgrade
+  namespace: system-upgrade
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: system-upgrade
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: system-upgrade
+  namespace: system-upgrade
+---
+# Server 节点升级计划
+apiVersion: upgrade.cattle.io/v1
+kind: Plan
+metadata:
+  name: k3s-server-upgrade
+  namespace: system-upgrade
+spec:
+  # 并发度：每次只升级一个 server
+  concurrency: 1
+  
+  # 升级前封锁节点
+  cordon: true
+  
+  # 目标节点选择器
+  nodeSelector:
+    matchExpressions:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+    - key: k3s-upgrade
+      operator: NotIn
+      values:
+      - disabled
+      - "false"
+  
+  # 升级前准备
+  prepare:
+    image: rancher/k3s-upgrade
+    args:
+    - prepare
+    - k3s-server
+  
+  # 升级容器
+  upgrade:
+    image: rancher/k3s-upgrade
+  
+  # 目标版本
+  version: v1.32.3+k3s1
+  
+  # 升级后验证
+  drain:
+    force: true
+    disableEviction: false
+    deleteLocalData: true
+    ignoreDaemonSets: true
+    skipWaitForDeleteTimeout: 60
+---
+# Agent 节点升级计划
+apiVersion: upgrade.cattle.io/v1
+kind: Plan
+metadata:
+  name: k3s-agent-upgrade
+  namespace: system-upgrade
+spec:
+  # Agent 可以并行升级，但限制数量
+  concurrency: 2
+  
+  cordon: true
+  
+  nodeSelector:
+    matchExpressions:
+    - key: node-role.kubernetes.io/control-plane
+      operator: DoesNotExist
+    - key: k3s-upgrade
+      operator: NotIn
+      values:
+      - disabled
+      - "false"
+  
+  # Agent 等待 server 升级完成
+  prepare:
+    image: rancher/k3s-upgrade
+    args:
+    - prepare
+    - k3s-server-upgrade  # 等待 server plan 完成
+  
+  upgrade:
+    image: rancher/k3s-upgrade
+  
+  version: v1.32.3+k3s1
+  
+  drain:
+    force: false
+    disableEviction: false
+    skipWaitForDeleteTimeout: 300
+---
+# 边缘节点特殊升级计划（维护窗口）
+apiVersion: upgrade.cattle.io/v1
+kind: Plan
+metadata:
+  name: k3s-edge-upgrade
+  namespace: system-upgrade
+  annotations:
+    # 仅在特定时间窗口执行（需要配合 cronjob 或手动触发）
+    upgrade.cattle.io/schedule: "0 2 * * 0"  # 每周日凌晨 2 点
+spec:
+  concurrency: 1
+  cordon: true
+  
+  nodeSelector:
+    matchLabels:
+      node-type: edge
+      upgrade-window: weekend
+  
+  # 边缘节点特殊处理：快速升级，最小中断
+  upgrade:
+    image: rancher/k3s-upgrade
+    args:
+    - --edge-mode
+    - --skip-verify
+  
+  version: v1.32.3+k3s1
+  
+  # 边缘节点不 drain（可能导致服务中断）
+  drain:
+    enabled: false

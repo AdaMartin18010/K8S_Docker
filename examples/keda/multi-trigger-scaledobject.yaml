@@ -1,0 +1,30 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: multi-trigger-app
+  namespace: default
+spec:
+  scaleTargetRef:
+    name: adaptive-processor
+  minReplicaCount: 2
+  maxReplicaCount: 100
+  triggers:
+  - type: kafka
+    name: kafka-trigger
+    metadata:
+      bootstrapServers: kafka:9092
+      consumerGroup: my-group
+      topic: events
+      lagThreshold: "100"
+  - type: cpu
+    name: cpu-trigger
+    metadata:
+      type: Utilization
+      value: "70"
+  - type: cron
+    name: cron-trigger
+    metadata:
+      timezone: Asia/Shanghai
+      start: 0 8 * * 1-5
+      end: 0 20 * * 1-5
+      desiredReplicas: "10"

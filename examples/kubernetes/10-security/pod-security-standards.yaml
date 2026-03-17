@@ -1,0 +1,38 @@
+# Pod Security Standards 配置示例
+# 替代已废弃的 PodSecurityPolicy
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: restricted-ns
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: secure-app
+  namespace: restricted-ns
+spec:
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: app
+      image: nginx:alpine
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]
+        runAsUser: 101
+        seccompProfile:
+          type: RuntimeDefault
+      resources:
+        limits:
+          cpu: "100m"
+          memory: "128Mi"

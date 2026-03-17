@@ -1,0 +1,91 @@
+# 支持实时迁移的 VM 配置
+# 注意：使用 masquerade 网络模式才能支持实时迁移
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: migratable-vm
+  namespace: default
+  annotations:
+    # 显式启用实时迁移支持
+    kubevirt.io/allow-pod-bridge-network-live-migration: "true"
+spec:
+  running: true
+  template:
+    metadata:
+      labels:
+        app: migratable-vm
+    spec:
+      domain:
+        cpu:
+          cores: 2
+        resources:
+          requests:
+            memory: 2Gi
+        devices:
+          disks:
+          - name: rootdisk
+            disk:
+              bus: virtio
+          interfaces:
+          - name: default
+            # masquerade 模式支持实时迁移
+            masquerade: {}
+          # 启用 QEMU Guest Agent，用于优雅关闭和文件系统冻结
+          - name: guest-agent
+            disk:
+              bus: virtio
+      networks:
+      - name: default
+        pod: {}
+      volumes:
+      - name: rootdisk
+        persistentVolumeClaim:
+          claimName: migratable-vm-disk
+      - name: guest-agent
+        containerDisk:
+          image: registry:5000/kubevirt/qemu-guest-agent:latest
+      # 亲和性配置 - 避免同一节点运行多个关键 VM
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - migratable-vm
+              topologyKey: kubernetes.io/hostname
+---
+# 手动触发实时迁移
+apiVersion: kubevirt.io/v1
+kind: VirtualMachineInstanceMigration
+metadata:
+  name: manual-migration
+  namespace: default
+spec:
+  vmiName: migratable-vm
+  # 可选：指定目标节点
+  # targetNode: worker-2
+---
+# 自动迁移策略（通过 Descheduler）
+apiVersion: descheduler.io/v1alpha1
+kind: DeschedulerPolicy
+strategies:
+  RemoveDuplicates:
+    enabled: false
+  HighNodeUtilization:
+    enabled: true
+    params:
+      nodeResourceUtilizationThresholds:
+        thresholds:
+          cpu: 70
+          memory: 80
+  # 基于 PSI 的迁移策略
+  MigrationBasedOnPressure:
+    enabled: true
+    params:
+      pressureThresholds:
+        memory: 60  # 内存压力阈值
+        io: 80

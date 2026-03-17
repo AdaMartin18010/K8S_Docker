@@ -1,0 +1,16 @@
+# Kubecost Helm 配置示例
+global:
+  prometheus:
+    enabled: true
+
+kubecostProductConfigs:
+  currencyCode: "CNY"
+  defaultDiscount: "20%"
+  sharedNamespaces: "kube-system"
+  clusterName: "production-cluster"
+
+networkCosts:
+  enabled: true
+
+predict:
+  enabled: true

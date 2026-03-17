@@ -1,75 +1,84 @@
 # 术语表
 
-## A
+> Docker & Kubernetes 核心术语
 
-**Admission Controller**: 准入控制器，拦截 API 请求的插件
+---
 
-**Affinity**: 亲和性，Pod 调度的偏好规则
+## 容器相关
 
-## B
+| 术语 | 英文 | 说明 |
+|------|------|------|
+| 容器 | Container | 应用及其依赖的打包单元 |
+| 镜像 | Image | 容器的只读模板 |
+| 镜像层 | Layer | 镜像的层级结构 |
+| Dockerfile | Dockerfile | 定义镜像构建步骤的文件 |
+| 仓库 | Registry | 存储和分发镜像的服务 |
+| 卷 | Volume | 容器持久化存储 |
 
-**BuildKit**: Docker 的新一代构建系统
+---
 
-## C
+## Kubernetes 相关
 
-**Container**: 容器，应用及其依赖的打包单元
+| 术语 | 英文 | 说明 |
+|------|------|------|
+| Pod | Pod | K8s 最小调度单元 |
+| 节点 | Node | 工作机器 |
+| 集群 | Cluster | 节点集合 |
+| 命名空间 | Namespace | 资源隔离逻辑分组 |
+| 标签 | Label | 用于标识资源的键值对 |
+| 选择器 | Selector | 根据标签筛选资源 |
+| 控制器 | Controller | 确保期望状态与实际状态一致 |
+| 调度器 | Scheduler | 负责 Pod 到节点的调度 |
+| API Server | API Server | K8s 控制平面的入口 |
+| etcd | etcd | 分布式键值存储 |
 
-**CRI**: Container Runtime Interface，容器运行时接口
+---
 
-**CSI**: Container Storage Interface，容器存储接口
+## 工作负载相关
 
-## D
+| 术语 | 英文 | 说明 |
+|------|------|------|
+| Deployment | Deployment | 无状态应用管理 |
+| StatefulSet | StatefulSet | 有状态应用管理 |
+| DaemonSet | DaemonSet | 每个节点运行一个 Pod |
+| Job | Job | 一次性任务 |
+| CronJob | CronJob | 定时任务 |
+| ReplicaSet | ReplicaSet | Pod 副本管理 |
 
-**DaemonSet**: 守护进程集，每个节点运行一个 Pod
+---
 
-**Deployment**: 部署，管理无状态应用的资源
+## 网络相关
 
-## E
+| 术语 | 英文 | 说明 |
+|------|------|------|
+| Service | Service | Pod 的网络抽象 |
+| Ingress | Ingress | 集群入口路由 |
+| Endpoint | Endpoint | Service 后端 Pod 列表 |
+| DNS | DNS | 服务发现机制 |
+| CNI | CNI | 容器网络接口 |
+| NetworkPolicy | NetworkPolicy | 网络隔离策略 |
 
-**Ephemeral Container**: 临时容器，用于调试的临时容器
+---
 
-**etcd**: Kubernetes 的分布式键值存储
+## 存储相关
 
-## H
+| 术语 | 英文 | 说明 |
+|------|------|------|
+| PV | PersistentVolume | 持久卷 |
+| PVC | PersistentVolumeClaim | 持久卷声明 |
+| StorageClass | StorageClass | 存储类 |
+| ConfigMap | ConfigMap | 配置数据 |
+| Secret | Secret | 敏感数据 |
 
-**HPA**: Horizontal Pod Autoscaler，水平 Pod 自动扩缩容
+---
 
-## I
+## 安全相关
 
-**Ingress**: 入口，管理外部访问集群内服务的规则
-
-**Init Container**: 初始化容器，在主容器前运行的容器
-
-## K
-
-**kubelet**: K8s 节点代理，负责 Pod 生命周期管理
-
-**kube-proxy**: K8s 网络代理，实现 Service 的网络规则
-
-## N
-
-**Namespace**: 命名空间，集群内的虚拟分区
-
-**Node**: 节点，K8s 集群中的工作机器
-
-## P
-
-**Pod**: K8s 最基本的部署单元，包含一个或多个容器
-
-**PVC**: PersistentVolumeClaim，持久化卷声明
-
-## S
-
-**Secret**: 密钥，用于存储敏感信息
-
-**Service**: 服务，提供稳定的网络端点
-
-**StatefulSet**: 有状态集，管理有状态应用
-
-**Sidecar**: 边车容器，与主容器共享生命周期
-
-## V
-
-**VPA**: Vertical Pod Autoscaler，垂直 Pod 自动扩缩容
-
-**Volume**: 卷，Pod 的存储目录
+| 术语 | 英文 | 说明 |
+|------|------|------|
+| RBAC | RBAC | 基于角色的访问控制 |
+| ServiceAccount | ServiceAccount | Pod 身份标识 |
+| NetworkPolicy | NetworkPolicy | 网络策略 |
+| PodSecurity | PodSecurity | Pod 安全标准 |
+| TLS | TLS | 传输层安全 |
+| mTLS | mTLS | 双向 TLS |

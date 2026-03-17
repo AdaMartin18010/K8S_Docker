@@ -1,0 +1,108 @@
+# SpinKube SpinApp 配置
+# 在 Kubernetes 上运行 Spin WebAssembly 应用
+
+apiVersion: spin.core.spinkube.dev/v1alpha1
+kind: SpinApp
+metadata:
+  name: hello-spin
+  namespace: default
+spec:
+  # Spin 应用镜像
+  image: ghcr.io/spinkube/containerd-shim-spin/examples/spin-rust-hello:v0.15.0
+  
+  # 副本数
+  replicas: 2
+  
+  # 使用 containerd-shim-spin 执行器
+  executor: containerd-shim-spin
+  
+  # 自动扩缩容配置
+  enableAutoscaling: true
+  
+  # 资源限制
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "100m"
+      memory: "128Mi"
+  
+  # 环境变量
+  variables:
+  - name: SPIN_APP_NAME
+    value: "hello-rust"
+  - name: RUST_LOG
+    value: "info"
+  
+  # 卷挂载（支持 Spin 文件挂载）
+  volumes:
+  - name: static-assets
+    content:
+      inline: |
+        {"message": "Hello from mounted volume!"}
+    path: /assets/config.json
+
+---
+# 使用 HTTP 触发器的 SpinApp
+apiVersion: spin.core.spinkube.dev/v1alpha1
+kind: SpinApp
+metadata:
+  name: api-gateway
+  namespace: production
+spec:
+  image: ghcr.io/example/api-gateway:v1.0.0
+  replicas: 3
+  executor: containerd-shim-spin
+  
+  # 端口配置（Spin HTTP 触发器）
+  runtimeConfig:
+    http:
+      base: /
+  
+  # 健康检查
+  healthChecks:
+    liveness:
+      path: /health/live
+      initialDelaySeconds: 3
+      periodSeconds: 10
+    readiness:
+      path: /health/ready
+      initialDelaySeconds: 3
+      periodSeconds: 5
+  
+  # 服务配置
+  services:
+  - name: api
+    port: 80
+    targetPort: 8080
+    type: ClusterIP
+
+---
+# SpinAppExecutor 配置
+apiVersion: core.spinkube.dev/v1alpha1
+kind: SpinAppExecutor
+metadata:
+  name: containerd-shim-spin
+spec:
+  createDeployment: true
+  deploymentConfig:
+    runtimeClassName: wasmtime-spin
+    nodeSelector:
+      runtime: wasm
+    tolerations:
+    - key: "wasm"
+      operator: "Equal"
+      value: "true"
+      effect: "NoSchedule"
+
+---
+# RuntimeClass for WebAssembly
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: wasmtime-spin
+handler: spin
+scheduling:
+  nodeSelector:
+    runtime: wasm

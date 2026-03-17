@@ -1,0 +1,54 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: rabbitmq-consumer-scaler
+  namespace: default
+spec:
+  scaleTargetRef:
+    name: order-processor
+  pollingInterval: 10
+  cooldownPeriod: 30
+  minReplicaCount: 1
+  maxReplicaCount: 100
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+          - type: Percent
+            value: 50
+            periodSeconds: 60
+          - type: Pods
+            value: 2
+            periodSeconds: 60
+          selectPolicy: Min
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies:
+          - type: Percent
+            value: 100
+            periodSeconds: 30
+          - type: Pods
+            value: 10
+            periodSeconds: 30
+          selectPolicy: Max
+  triggers:
+  - type: rabbitmq
+    metadata:
+      protocol: amqp
+      queueName: orders
+      queueLength: "50"
+    authenticationRef:
+      name: rabbitmq-trigger-auth
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: rabbitmq-trigger-auth
+  namespace: default
+spec:
+  secretTargetRef:
+  - parameter: host
+    name: rabbitmq-secret
+    key: host

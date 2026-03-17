@@ -1,0 +1,183 @@
+# Istio Ambient Mesh 零信任配置
+
+---
+# 启用 Ambient 模式的 Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: payments
+  labels:
+    istio.io/dataplane-mode: ambient
+    # 指定使用哪个 waypoint
+    istio.io/use-waypoint: payments-waypoint
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: orders
+  labels:
+    istio.io/dataplane-mode: ambient
+    istio.io/use-waypoint: orders-waypoint
+---
+# L4 层零信任 - 强制 mTLS
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: payments
+spec:
+  mtls:
+    mode: STRICT  # 强制 mTLS，拒绝明文流量
+---
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: orders
+spec:
+  mtls:
+    mode: STRICT
+---
+# 全局 mTLS 策略
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: istio-system
+spec:
+  mtls:
+    mode: STRICT
+---
+# Waypoint Proxy - L7 策略执行点
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: Gateway
+metadata:
+  name: payments-waypoint
+  namespace: payments
+spec:
+  gatewayClassName: istio-waypoint
+  listeners:
+  - name: mesh
+    port: 15008
+    protocol: HBONE
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: Gateway
+metadata:
+  name: orders-waypoint
+  namespace: orders
+spec:
+  gatewayClassName: istio-waypoint
+  listeners:
+  - name: mesh
+    port: 15008
+    protocol: HBONE
+---
+# L7 授权策略 - 基于 SPIFFE ID 的细粒度访问控制
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: backend-policy
+  namespace: payments
+spec:
+  targetRefs:
+  - kind: Gateway
+    group: gateway.networking.k8s.io
+    name: payments-waypoint
+  action: ALLOW
+  rules:
+  # 只允许 orders namespace 的 api service 访问 payments backend
+  - from:
+    - source:
+        principals:
+        - "cluster.local/ns/orders/sa/api"
+        - "cluster.local/ns/web/sa/frontend"
+    to:
+    - operation:
+        methods: ["GET", "POST"]
+        paths: ["/api/v1/payments/*", "/health"]
+    # 额外条件检查
+    when:
+    - key: connection.sni
+      values: ["backend.payments.svc.cluster.local"]
+  
+  # 允许监控抓取 metrics
+  - from:
+    - source:
+        principals:
+        - "cluster.local/ns/monitoring/sa/prometheus"
+    to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/metrics"]
+---
+# 拒绝策略示例
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: deny-sensitive
+  namespace: payments
+spec:
+  action: DENY
+  rules:
+  # 禁止从外部直接访问敏感接口
+  - to:
+    - operation:
+        paths: ["/admin/*", "/debug/*", "/internal/*"]
+    from:
+    - source:
+        notPrincipals:
+        - "cluster.local/ns/admin/sa/admin-tool"
+---
+# 请求认证 - JWT 验证（与 SPIFFE 结合使用）
+apiVersion: security.istio.io/v1beta1
+kind: RequestAuthentication
+metadata:
+  name: jwt-auth
+  namespace: payments
+spec:
+  selector:
+    matchLabels:
+      app: backend
+  jwtRules:
+  - issuer: "https://auth.company.com"
+    jwksUri: "https://auth.company.com/.well-known/jwks.json"
+    audiences:
+    - "payments-api"
+    forwardOriginalToken: false
+    outputPayloadToHeader: "x-jwt-claim"
+---
+# 组合策略：SPIFFE + JWT
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: combined-authz
+  namespace: payments
+spec:
+  action: ALLOW
+  rules:
+  # 服务间调用需要有效的 SPIFFE 身份
+  - from:
+    - source:
+        principals:
+        - "cluster.local/ns/orders/sa/*"
+    to:
+    - operation:
+        methods: ["POST"]
+        paths: ["/api/v1/payments"]
+    # 同时需要 JWT 中的特定 scope
+    when:
+    - key: request.auth.claims[scope]
+      values: ["payments:write"]
+  
+  # 用户访问需要有效的 JWT
+  - from:
+    - source:
+        requestPrincipals: ["*"]
+    to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/api/v1/payments/history"]
+    when:
+    - key: request.auth.claims[role]
+      values: ["user", "admin"]

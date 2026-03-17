@@ -1,0 +1,119 @@
+# ApplicationSet - Matrix Generator 示例
+# 适用于：多维度组合部署（集群 × 服务 × 环境）
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: services-matrix
+  namespace: argocd
+spec:
+  generators:
+  # 矩阵生成器：组合多个维度
+  - matrix:
+      generators:
+      # 维度1：所有生产集群
+      - clusters:
+          selector:
+            matchLabels:
+              environment: production
+      # 维度2：Git 仓库中的服务目录
+      - git:
+          repoURL: https://github.com/example/gitops-repo.git
+          revision: main
+          directories:
+          - path: services/*
+          # 排除特定服务
+          - path: services/experimental-*
+            exclude: true
+  template:
+    metadata:
+      # 组合命名：服务名-集群名
+      name: '{{path.basename}}-{{name}}'
+      labels:
+        service: '{{path.basename}}'
+        cluster: '{{name}}'
+        environment: production
+      finalizers:
+      - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: production-services
+      source:
+        repoURL: https://github.com/example/gitops-repo.git
+        targetRevision: main
+        path: '{{path}}'
+        helm:
+          valueFiles:
+          - values.yaml
+          # 集群特定配置
+          - '../../clusters/{{name}}/values.yaml'
+          # 环境特定配置
+          - '../../environments/production/values.yaml'
+          parameters:
+          - name: cluster.name
+            value: '{{name}}'
+          - name: service.name
+            value: '{{path.basename}}'
+      destination:
+        server: '{{server}}'
+        namespace: '{{path.basename}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=true
+        managedNamespaceMetadata:
+          labels:
+            argocd.argoproj.io/managed-by: argocd
+            environment: production
+          annotations:
+            owner: platform-team
+---
+# 更复杂的矩阵：集群 × 环境 × 服务
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: full-matrix
+  namespace: argocd
+spec:
+  generators:
+  - matrix:
+      generators:
+      # 第一维：从 Git 文件读取环境配置
+      - git:
+          repoURL: https://github.com/example/gitops-repo.git
+          revision: main
+          files:
+          - path: "config/**/env-config.yaml"
+      # 第二维：该环境中的服务列表
+      - git:
+          repoURL: https://github.com/example/gitops-repo.git
+          revision: main
+          directories:
+          - path: 'services/{{env.services_dir}}/*'
+  template:
+    metadata:
+      name: '{{path.basename}}-{{env.name}}'
+      labels:
+        service: '{{path.basename}}'
+        environment: '{{env.name}}'
+    spec:
+      project: '{{env.project}}'
+      source:
+        repoURL: https://github.com/example/gitops-repo.git
+        targetRevision: '{{env.revision}}'
+        path: '{{path}}'
+        helm:
+          parameters:
+          - name: replicaCount
+            value: '{{env.replicas}}'
+          - name: resources.requests.cpu
+            value: '{{env.cpu_request}}'
+          - name: resources.requests.memory
+            value: '{{env.memory_request}}'
+      destination:
+        server: '{{env.cluster_server}}'
+        namespace: '{{path.basename}}-{{env.name}}'
+      syncPolicy:
+        automated:
+          prune: '{{env.auto_prune}}'
+          selfHeal: true

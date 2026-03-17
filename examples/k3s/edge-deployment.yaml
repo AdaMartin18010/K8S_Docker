@@ -1,0 +1,145 @@
+# 边缘设备应用部署示例
+# 适用于资源受限的边缘节点
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: edge-workloads
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edge-data-collector
+  namespace: edge-workloads
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edge-data-collector
+  template:
+    metadata:
+      labels:
+        app: edge-data-collector
+    spec:
+      # 节点选择器：只部署到边缘节点
+      nodeSelector:
+        node-type: edge
+        device-class: industrial
+      
+      # 容忍边缘节点的污点
+      tolerations:
+      - key: "edge"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+      - key: "resource-constrained"
+        operator: "Exists"
+        effect: "PreferNoSchedule"
+      
+      containers:
+      - name: collector
+        image: edge-collector:v1.2.0
+        
+        # 资源限制（严格限制以适应边缘设备）
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        
+        # 存储使用 hostPath（边缘可能无动态 PV）
+        volumeMounts:
+        - name: data-buffer
+          mountPath: /data/buffer
+        - name: config
+          mountPath: /etc/collector
+        
+        env:
+        - name: BUFFER_SIZE
+          value: "1000"
+        - name: BATCH_INTERVAL
+          value: "30s"
+        - name: OFFLINE_MODE
+          value: "true"
+        
+        # 健康检查
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 60
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      
+      # 离线镜像拉取策略
+      imagePullPolicy: IfNotPresent
+      
+      volumes:
+      - name: data-buffer
+        hostPath:
+          path: /var/lib/edge/buffer
+          type: DirectoryOrCreate
+      - name: config
+        configMap:
+          name: collector-config
+      
+      # 优先级类（边缘应用较低优先级）
+      priorityClassName: edge-workload
+      
+      # 优雅关闭
+      terminationGracePeriodSeconds: 60
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: collector-config
+  namespace: edge-workloads
+data:
+  config.yaml: |
+    sensors:
+      - type: temperature
+        interval: 60s
+      - type: pressure
+        interval: 30s
+      - type: vibration
+        interval: 10s
+    
+    buffering:
+      max_size: 10000
+      flush_interval: 300s
+      compression: true
+    
+    connectivity:
+      uplink_url: https://cloud-gateway.example.com/ingest
+      retry_attempts: 5
+      offline_storage: /data/buffer
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: edge-collector-pdb
+  namespace: edge-workloads
+spec:
+  minAvailable: 0  # 边缘节点允许全部中断
+  selector:
+    matchLabels:
+      app: edge-data-collector
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: edge-workload
+value: 1000
+preemptionPolicy: Never
+globalDefault: false
+description: "Edge workload priority - never preempt other pods"

@@ -1,0 +1,103 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: ubuntu-vm
+  namespace: default
+  labels:
+    app: ubuntu-vm
+    environment: demo
+spec:
+  running: false  # 控制 VM 运行状态，可设置为 true 启动
+  template:
+    metadata:
+      labels:
+        kubevirt.io/domain: ubuntu-vm
+        app: ubuntu-vm
+    spec:
+      domain:
+        cpu:
+          cores: 2
+          sockets: 1
+          threads: 1
+        resources:
+          requests:
+            memory: 4Gi
+          limits:
+            memory: 4Gi
+        devices:
+          disks:
+          - name: rootdisk
+            disk:
+              bus: virtio
+          - name: cloudinit
+            cdrom:
+              bus: sata
+          interfaces:
+          - name: default
+            masquerade: {}
+      networks:
+      - name: default
+        pod: {}
+      volumes:
+      - name: rootdisk
+        dataVolume:
+          name: ubuntu-dv
+      - name: cloudinit
+        cloudInitNoCloud:
+          userData: |
+            #cloud-config
+            hostname: ubuntu-vm
+            users:
+            - name: ubuntu
+              sudo: ALL=(ALL) NOPASSWD:ALL
+              ssh_authorized_keys:
+              - ssh-rsa AAAAB3NzaC1yc2E...  # 替换为你的 SSH 公钥
+            package_update: true
+            packages:
+            - qemu-guest-agent
+            - net-tools
+            runcmd:
+            - systemctl enable --now qemu-guest-agent
+---
+# DataVolume - 从镜像创建 PVC
+apiVersion: cdi.kubevirt.io/v1beta1
+kind: DataVolume
+metadata:
+  name: ubuntu-dv
+  namespace: default
+spec:
+  source:
+    http:
+      url: "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
+  pvc:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: 20Gi
+    storageClassName: standard  # 根据你的集群调整
+---
+# 为 VM 创建 Service，允许外部访问
+apiVersion: v1
+kind: Service
+metadata:
+  name: ubuntu-vm-ssh
+  namespace: default
+spec:
+  type: NodePort
+  selector:
+    kubevirt.io/domain: ubuntu-vm
+  ports:
+  - name: ssh
+    port: 22
+    targetPort: 22
+    nodePort: 30022
+---
+# VM 实时迁移示例
+apiVersion: kubevirt.io/v1
+kind: VirtualMachineInstanceMigration
+metadata:
+  name: migrate-ubuntu-vm
+  namespace: default
+spec:
+  vmiName: ubuntu-vm

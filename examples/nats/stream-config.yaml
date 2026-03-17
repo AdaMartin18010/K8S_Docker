@@ -1,0 +1,187 @@
+# NATS JetStream 流配置
+# 用于事件溯源和消息持久化
+
+# 订单流
+apiVersion: jetstream.nats.io/v1beta2
+kind: Stream
+metadata:
+  name: orders
+  namespace: nats
+spec:
+  name: ORDERS
+  subjects:
+  - "orders.created"
+  - "orders.updated"
+  - "orders.cancelled"
+  - "orders.completed"
+  
+  # 存储配置
+  storage: file  # memory 或 file
+  replicas: 3
+  retention: limits  # limits, interest, workqueue
+  discard: old  # old 或 new
+  
+  # 限制
+  maxMsgs: 1000000
+  maxBytes: 5Gi
+  maxAge: "30d"
+  maxMsgsPerSubject: 10000
+  maxMsgSize: 1Mi
+  
+  # 压缩
+  compression: s2_better
+  
+  # 重复消息检测（幂等性）
+  duplicateWindow: "5m"
+  
+  # 镜像（跨地域复制）
+  mirror:
+    name: ORDERS_SOURCE
+    optStartSeq: 0
+    optStartTime: "2025-01-01T00:00:00Z"
+    filterSubject: "orders.>"
+    external:
+      apiPrefix: "$JS.us-west-2.API"
+      deliveryPrefix: "$JS.us-west-2.DELIVER"
+
+---
+# 日志流
+apiVersion: jetstream.nats.io/v1beta2
+kind: Stream
+metadata:
+  name: logs
+  namespace: nats
+spec:
+  name: LOGS
+  subjects:
+  - "logs.>"
+  
+  storage: file
+  replicas: 3
+  retention: limits
+  
+  # 长期存储
+  maxBytes: 100Gi
+  maxAge: "90d"
+  
+  # 分层存储
+  placement:
+    cluster: production
+    tags:
+    - storage:hot
+
+---
+# 消费者配置
+apiVersion: jetstream.nats.io/v1beta2
+kind: Consumer
+metadata:
+  name: order-processor
+  namespace: nats
+spec:
+  streamName: ORDERS
+  durableName: order-processor
+  description: "Process new orders"
+  
+  # 过滤
+  filterSubject: "orders.created"
+  
+  # 交付模式
+  deliverPolicy: all  # all, last, new, byStartSeq, byStartTime
+  optStartSeq: 0
+  
+  # 确认模式
+  ackPolicy: explicit  # none, all, explicit
+  ackWait: 30s
+  maxDeliver: 3
+  
+  # 重放策略
+  replayPolicy: instant  # instant, original
+  
+  # 速率限制
+  rateLimit: 1000  # 每秒消息数
+  
+  # 最大等待
+  maxWaiting: 100
+  
+  # 最大拉取请求
+  maxRequestBatch: 100
+  maxRequestExpires: "10s"
+  
+  # 采样（用于监控）
+  sampleFreq: "10"
+
+---
+# Pull 消费者（批处理）
+apiVersion: jetstream.nats.io/v1beta2
+kind: Consumer
+metadata:
+  name: order-analytics
+  namespace: nats
+spec:
+  streamName: ORDERS
+  durableName: order-analytics
+  description: "Analytics batch processor"
+  
+  filterSubject: "orders.completed"
+  
+  # Pull 消费者配置
+  deliverPolicy: all
+  ackPolicy: explicit
+  ackWait: 5m  # 较长的处理时间
+  maxDeliver: 5
+  
+  # 批处理优化
+  maxRequestBatch: 1000
+  maxRequestMaxBytes: 10MiB
+  
+  # 空闲心跳
+  idleHeartbeat: "30s"
+  
+  # 流量控制
+  flowControl: true
+
+---
+# 键值存储
+apiVersion: jetstream.nats.io/v1beta2
+kind: KeyValue
+metadata:
+  name: config-store
+  namespace: nats
+spec:
+  name: CONFIG
+  bucket: config
+  
+  # 存储
+  storage: file
+  replicas: 3
+  maxBytes: 100Mi
+  
+  # TTL
+  ttl: 24h
+  
+  # 历史版本
+  history: 5
+  
+  # 压缩
+  compression: s2_default
+
+---
+# 对象存储
+apiVersion: jetstream.nats.io/v1beta2
+kind: ObjectStore
+metadata:
+  name: file-storage
+  namespace: nats
+spec:
+  name: FILES
+  bucket: uploads
+  
+  storage: file
+  replicas: 3
+  maxBytes: 10Gi
+  
+  # 分块
+  chunkSize: 1Mi
+  
+  # 压缩
+  compression: s2_better

@@ -1,0 +1,208 @@
+# NATS Helm Chart 生产配置
+# 用于在 Kubernetes 上部署高可用 NATS JetStream 集群
+
+# NATS 服务器配置
+config:
+  # JetStream 配置
+  jetstream:
+    enabled: true
+    
+    # JetStream 域（用于联邦部署）
+    domain: "production"
+    
+    # 唯一标签（用于集群识别）
+    uniqueTag: "k8s:production:us-east-1"
+    
+    # 内存存储
+    memoryStore:
+      enabled: true
+      maxSize: 2Gi
+    
+    # 文件存储
+    fileStore:
+      enabled: true
+      size: 50Gi
+      storageClassName: "fast-ssd"
+      autoResize: true
+    
+    # 加密配置
+    encryption:
+      key: $JS_KEY  # 从环境变量读取
+      cipher: "AES-GCM"
+  
+  # 集群模式
+  cluster:
+    enabled: true
+    replicas: 3
+    routeURLs:
+      useFQDN: true
+      k8sClusterDomain: cluster.local
+  
+  # Leafnode（边缘连接）
+  leafnodes:
+    enabled: true
+    port: 7422
+    tls:
+      enabled: true
+      certFile: /etc/nats-certs/leaf/tls.crt
+      keyFile: /etc/nats-certs/leaf/tls.key
+      caFile: /etc/nats-certs/leaf/ca.crt
+    
+    # 远程 leaf 节点（中心-边缘架构）
+    remotes:
+    - url: tls://hub.nats.example.com:7422
+      credentials:
+        secret:
+          name: leaf-credentials
+          key: creds
+      subjectFilters:
+      - "edge.us-east.>"
+      - "config.>"
+    
+    compression:
+      mode: s2_better  # s2_default, s2_better, s2_best
+  
+  # Gateway（超集群）
+  gateway:
+    enabled: true
+    name: "us-east-1"
+    rejectUnknownCluster: true
+    tls:
+      enabled: true
+      certFile: /etc/nats-certs/gateway/tls.crt
+      keyFile: /etc/nats-certs/gateway/tls.key
+    
+    # 其他集群
+    urls:
+    - nats://nats-0.nats.nats.svc:7222
+    - nats://nats-1.nats.nats.svc:7222
+    - nats://nats-2.nats.nats.svc:7222
+  
+  # WebSocket（浏览器客户端）
+  websocket:
+    enabled: true
+    port: 8080
+    tls:
+      enabled: true
+      certFile: /etc/nats-certs/ws/tls.crt
+      keyFile: /etc/nats-certs/ws/tls.key
+    compression: true
+  
+  # MQTT（IoT 设备）
+  mqtt:
+    enabled: true
+    port: 1883
+    tls:
+      enabled: true
+      certFile: /etc/nats-certs/mqtt/tls.crt
+      keyFile: /etc/nats-certs/mqtt/tls.key
+    ackWait: 1m
+    maxAckPending: 100
+  
+  # 认证配置
+  merge:
+    # 使用 JWT/NKey 认证
+    authorization:
+      type: jwks
+      jwks:
+        url: https://auth.example.com/.well-known/jwks.json
+        timeout: 2s
+      
+      # 或从文件加载用户
+      users:
+      - user: $SYS
+        password: $SYS_PASSWORD
+        permissions:
+          publish:
+            allow: [">"]
+          subscribe:
+            allow: [">"]
+      
+      # 默认权限
+      default_permissions:
+        publish:
+          allow: ["orders.>", "events.>"]
+        subscribe:
+          allow: ["orders.>", "notifications.${USER}.>"]
+
+# Pod 模板配置
+podTemplate:
+  # 资源限制
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2000m"
+      memory: "4Gi"
+  
+  # 亲和性配置
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: nats
+        topologyKey: kubernetes.io/hostname
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: node-type
+            operator: In
+            values:
+            - infrastructure
+  
+  # 容忍度
+  tolerations:
+  - key: "dedicated"
+    operator: "Equal"
+    value: "nats"
+    effect: "NoSchedule"
+  
+  # 安全上下文
+  securityContext:
+    fsGroup: 1000
+    runAsUser: 1000
+    runAsNonRoot: true
+  
+  # 持久化卷
+  persistence:
+    enabled: true
+    size: 50Gi
+    storageClassName: "fast-ssd"
+    accessMode: ReadWriteOnce
+
+# 指标和监控
+metrics:
+  enabled: true
+  port: 7777
+  
+  # Prometheus ServiceMonitor
+  serviceMonitor:
+    enabled: true
+    namespace: monitoring
+    interval: 15s
+    scrapeTimeout: 10s
+  
+  # Grafana Dashboard
+  grafanaDashboard:
+    enabled: true
+    namespace: monitoring
+
+# 遥测
+promExporter:
+  enabled: true
+  port: 7777
+
+# nats-box（管理工具）
+natsBox:
+  enabled: true
+  context:
+    enabled: true
+  
+  # 额外的 CLI 工具
+  extraContainers:
+  - name: nats-top
+    image: natsio/nats-top:latest
+    command: ["sleep", "infinity"]

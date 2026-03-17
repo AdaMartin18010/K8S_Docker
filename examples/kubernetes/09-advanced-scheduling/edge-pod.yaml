@@ -1,0 +1,32 @@
+# 边缘计算 Pod 配置示例
+# 使用 KubeEdge 特性
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: edge-analytics
+  namespace: default
+  annotations:
+    apps.kubeedge.io/restartOnFailure: "true"
+spec:
+  nodeSelector:
+    node-role.kubernetes.io/edge: "true"
+  tolerations:
+    - key: node-role.kubernetes.io/edge
+      operator: Exists
+      effect: NoSchedule
+  containers:
+    - name: video-analyzer
+      image: edge-analytics:v1.0.0
+      resources:
+        requests:
+          cpu: "500m"
+          memory: "512Mi"
+      volumeMounts:
+        - name: local-cache
+          mountPath: /cache
+  volumes:
+    - name: local-cache
+      hostPath:
+        path: /var/lib/edge/cache
+        type: DirectoryOrCreate

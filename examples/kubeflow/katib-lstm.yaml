@@ -1,0 +1,75 @@
+# Katib LSTM 超参优化示例
+apiVersion: kubeflow.org/v1beta1
+kind: Experiment
+metadata:
+  name: lstm-hpo
+  namespace: kubeflow
+spec:
+  parallelTrialCount: 2
+  maxTrialCount: 20
+  maxFailedTrialCount: 3
+  objective:
+    type: minimize
+    goal: 0.001
+    objectiveMetricName: loss
+    additionalMetricNames:
+    - val_loss
+    - accuracy
+  algorithm:
+    algorithmName: tpe
+  parameters:
+  - name: lstm_units
+    parameterType: int
+    feasibleSpace:
+      min: "32"
+      max: "256"
+  - name: dropout_rate
+    parameterType: double
+    feasibleSpace:
+      min: "0.1"
+      max: "0.5"
+  - name: learning_rate
+    parameterType: double
+    feasibleSpace:
+      min: "0.0001"
+      max: "0.01"
+  - name: batch_size
+    parameterType: categorical
+    feasibleSpace:
+      list:
+      - "16"
+      - "32"
+      - "64"
+  trialTemplate:
+    primaryContainerName: training-container
+    trialParameters:
+    - name: lstmUnits
+      reference: lstm_units
+    - name: dropoutRate
+      reference: dropout_rate
+    - name: learningRate
+      reference: learning_rate
+    - name: batchSize
+      reference: batch_size
+    trialSpec:
+      apiVersion: batch/v1
+      kind: Job
+      spec:
+        template:
+          spec:
+            containers:
+            - name: training-container
+              image: myregistry/lstm-training:v1
+              command:
+              - python
+              - train.py
+              - --lstm-units=${trialParameters.lstmUnits}
+              - --dropout=${trialParameters.dropoutRate}
+              - --lr=${trialParameters.learningRate}
+              - --batch-size=${trialParameters.batchSize}
+              resources:
+                limits:
+                  nvidia.com/gpu: 1
+                  memory: 8Gi
+                  cpu: 4
+            restartPolicy: Never
