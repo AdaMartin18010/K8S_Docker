@@ -220,5 +220,5 @@ docker run --rm --net container:<container-name> nicolaka/netshoot \
 
 ## 关联文档
 
-- [Docker Compose 网络](docs/02-docker/03-compose/)
-- [Kubernetes 网络](docs/03-kubernetes/03-networking/)
+- [Docker Compose 网络](../03-compose/)
+- [Kubernetes 网络](../../03-kubernetes/03-networking/)

@@ -9,7 +9,7 @@
 1. [Sidecar 模式](./sidecar-pattern.md)
 2. [微服务模式](./microservices.md)
 3. [部署模式](./deployment-strategies.md)
-4. [弹性模式](./resilience-patterns.md)
+4. [微服务模式](./microservices.md)
 
 ---
 
@@ -88,4 +88,4 @@ v1 (90%) ──▶ v1(70%)+v2(30%) ──▶ v2 (100%)
 
 ## 关联代码
 
-- [examples/kubernetes/02-deployment-patterns/](../../examples/kubernetes/02-deployment-patterns/)
+- [K8s 示例](../../examples/kubernetes/)

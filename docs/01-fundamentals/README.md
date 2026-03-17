@@ -10,7 +10,7 @@
 2. [Linux Namespace](./linux-namespace.md)
 3. [Linux Cgroups](./linux-cgroups.md)
 4. [OCI 开放容器标准](./oci-standard.md)
-5. [容器运行时](./container-runtime.md)
+5. [容器运行时](./containerd-runtimes.md)
 
 ---
 
@@ -58,5 +58,5 @@
 ## 学习建议
 
 - 理解 Namespace 和 Cgroups 是掌握容器技术的关键
-- 建议配合 [02-docker/](../02-docker/) 一起阅读
+- 建议配合 [Docker](../02-docker/) 一起阅读
 - 动手实验：使用 `unshare` 命令创建隔离环境

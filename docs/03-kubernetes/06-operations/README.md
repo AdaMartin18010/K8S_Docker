@@ -56,4 +56,4 @@ kubectl logs -f <pod-name>
 
 ## 关联代码
 
-- [examples/kubernetes/07-observability/](../../examples/kubernetes/07-observability/)
+- [可观测性示例](../../examples/opentelemetry/)

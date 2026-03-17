@@ -328,4 +328,4 @@ kubectl exec -n kube-system cilium-<xxx> -- cilium policy get
 ## 相关文档
 
 - [Gateway API 详解](gateway-api.md)
-- [Cilium eBPF 网络](docs/04-ecosystem/ebpf-cilium/)
+- [Cilium eBPF 网络](../04-ecosystem/ebpf-cilium/)
