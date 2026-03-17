@@ -8,9 +8,11 @@
 
 1. [CI/CD 实践](./cicd-guide.md)
 2. [性能调优](./performance-benchmarks.md)
-3. [故障排查](./debugging-guide.md)
-4. [混沌工程](./chaos-engineering/README.md)
-5. [案例研究](./case-studies/)
+3. [容量规划](./capacity-planning.md)
+4. [安全加固](./security-hardening-checklist.md)
+5. [故障排查](./debugging-guide.md)
+6. [混沌工程](./chaos-engineering/README.md)
+7. [案例研究](./case-studies/)
 
 ---
 
