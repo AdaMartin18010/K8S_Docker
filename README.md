@@ -16,7 +16,7 @@
 
 ## 📁 项目结构
 
-```
+```text
 K8S_Docker/
 ├── docs/                    # 📖 主题式文档 (3.5MB+, 90+ 文件)
 │   ├── 00-overview/         # 项目概览与学习指南
@@ -68,6 +68,7 @@ K8S_Docker/
 ## ✨ 2025 关键更新
 
 ### 新增特性
+
 - ✅ **K8s 1.33**: Sidecar GA、用户命名空间、DRA结构化参数
 - ✅ **containerd 2.0**: Wasm支持、Transfer Service、Nerdctl v2
 - ✅ **WebAssembly**: 冷启动快100倍、边缘计算新选择
@@ -87,6 +88,7 @@ K8S_Docker/
 - ✅ **本地AI**: Ollama、vLLM部署
 
 ### 移除 (已废弃)
+
 - ❌ PodSecurityPolicy (K8s 1.25 移除)
 - ❌ Dockershim (K8s 1.24 移除)
 - ❌ CephFS/RBD 内置插件
@@ -105,7 +107,7 @@ K8S_Docker/
 
 ## 📖 推荐阅读路径
 
-```
+```text
 1. 基础篇 (01-fundamentals)
    ├── 容器技术概述
    ├── OCI 开放容器标准
