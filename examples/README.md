@@ -148,17 +148,20 @@ kubectl apply -f k8s/
 ## 📚 学习路径
 
 ### 初学者
+
 1. `docker/basic/` - 理解 Dockerfile 最佳实践
 2. `kubernetes/01-basic-resources/` - 学习基础 K8s 资源
 3. `microservices-demo/` - 运行完整示例
 
 ### 中级
+
 1. `docker/multi-stage/` - 掌握多阶段构建
 2. `docker/compose/` - 学习容器编排
 3. `kubernetes/06-security/` - 安全配置
 4. `go-client/01-basic-ops/` - 编程式操作 K8s
 
 ### 高级
+
 1. `go-client/02-controller/` - 自定义控制器开发
 2. `anti-patterns/` - 理解常见错误
 3. `docker/security/` - 安全加固
@@ -166,6 +169,7 @@ kubectl apply -f k8s/
 ## ✅ 最佳实践检查清单
 
 ### Docker
+
 - [ ] 使用多阶段构建
 - [ ] 最小基础镜像 (scratch/distroless/alpine)
 - [ ] 非 root 用户运行
@@ -176,6 +180,7 @@ kubectl apply -f k8s/
 - [ ] 安全扫描
 
 ### Kubernetes
+
 - [ ] 资源请求和限制
 - [ ] 健康检查（liveness/readiness）
 - [ ] 安全上下文（runAsNonRoot, readOnlyRootFilesystem）
@@ -188,6 +193,7 @@ kubectl apply -f k8s/
 ## ❌ 常见错误
 
 ### Dockerfile
+
 1. 使用 `latest` 标签
 2. 以 root 用户运行
 3. 镜像包含敏感信息
@@ -195,6 +201,7 @@ kubectl apply -f k8s/
 5. 单阶段构建导致镜像过大
 
 ### Kubernetes
+
 1. 使用 privileged 容器
 2. 没有资源限制
 3. 硬编码敏感信息

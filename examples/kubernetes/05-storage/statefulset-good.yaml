@@ -1,0 +1,303 @@
+# ============================================================================
+# StatefulSet 最佳实践
+# 用于有状态应用：数据库、消息队列、分布式存储
+# ============================================================================
+
+---
+# Headless Service - 用于 Pod 网络标识
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-headless
+  namespace: database
+  labels:
+    app: postgres
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless 关键
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+  publishNotReadyAddresses: true
+
+---
+# 负载均衡 Service（用于读写）
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-read
+  namespace: database
+  labels:
+    app: postgres
+    role: read
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+
+---
+# StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: database
+  labels:
+    app: postgres
+spec:
+  serviceName: postgres-headless
+  replicas: 3
+  
+  # ========== 更新策略 ==========
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 0  # 灰度更新：设置为 2 只更新 pod-2
+  
+  # ========== Pod 管理策略 ==========
+  podManagementPolicy: OrderedReady  # 顺序创建/删除
+  # podManagementPolicy: Parallel    # 并行（用于独立存储的情况）
+  
+  selector:
+    matchLabels:
+      app: postgres
+  
+  template:
+    metadata:
+      labels:
+        app: postgres
+      annotations:
+        # 配置文件变更时重启
+        checksum/config: "{{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}"
+    spec:
+      # ========== 终止优雅期 ==========
+      terminationGracePeriodSeconds: 120
+      
+      # ========== 亲和性 ==========
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - postgres
+              topologyKey: kubernetes.io/hostname
+      
+      # ========== 初始化容器 ==========
+      initContainers:
+        - name: init-permissions
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              mkdir -p /var/lib/postgresql/data
+              chmod 700 /var/lib/postgresql/data
+              chown -R 999:999 /var/lib/postgresql
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql
+          securityContext:
+            runAsUser: 0
+      
+      # ========== 主容器 ==========
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+              name: postgres
+          
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
+            - name: POSTGRES_DB
+              value: myapp
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 4Gi
+            requests:
+              cpu: 500m
+              memory: 1Gi
+          
+          # ========== 健康检查 ==========
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - postgres
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - postgres
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          
+          # ========== 安全上下文 ==========
+          securityContext:
+            runAsUser: 999
+            runAsGroup: 999
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+          
+          # ========== 卷挂载 ==========
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql
+            - name: config
+              mountPath: /etc/postgresql/postgresql.conf
+              subPath: postgresql.conf
+            - name: tmp
+              mountPath: /tmp
+          
+          # ========== 生命周期 ==========
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - sh
+                  - -c
+                  - |
+                    echo "Preparing for shutdown..."
+                    pg_ctl stop -D /var/lib/postgresql/data/pgdata -m smart -t 60
+      
+      # ========== 卷定义 ==========
+      volumes:
+        - name: config
+          configMap:
+            name: postgres-config
+        - name: tmp
+          emptyDir:
+            sizeLimit: 100Mi
+  
+  # ========== VolumeClaim 模板 ==========
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app: postgres
+      spec:
+        storageClassName: fast-ssd  # 指定 StorageClass
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 50Gi
+
+---
+# StorageClass - 高性能 SSD
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-ssd
+provisioner: kubernetes.io/gce-pd  # 根据云平台调整
+parameters:
+  type: pd-ssd
+  replication-type: regional
+volumeBindingMode: WaitForFirstConsumer  # 延迟绑定，优化调度
+allowVolumeExpansion: true
+mountOptions:
+  - debug
+
+---
+# PersistentVolume (静态供应示例)
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: postgres-pv-0
+  labels:
+    app: postgres
+    pod: postgres-0
+spec:
+  capacity:
+    storage: 50Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: fast-ssd
+  gcePersistentDisk:
+    pdName: postgres-disk-0
+    fsType: ext4
+  claimRef:
+    namespace: database
+    name: data-postgres-0
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: topology.kubernetes.io/zone
+              operator: In
+              values:
+                - us-central1-a
+
+---
+# 备份 CronJob
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  namespace: database
+spec:
+  schedule: "0 2 * * *"  # 每天凌晨 2 点
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: backup
+              image: postgres:16-alpine
+              command:
+                - sh
+                - -c
+                - |
+                  pg_dump -h postgres-0.postgres-headless -U postgres myapp > /backup/backup_$(date +%Y%m%d_%H%M%S).sql
+              env:
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-credentials
+                      key: password
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+          volumes:
+            - name: backup
+              persistentVolumeClaim:
+                claimName: backup-pvc
+          restartPolicy: OnFailure

@@ -1,0 +1,251 @@
+# ============================================================================
+# Prometheus 监控配置
+# 完整的应用监控栈
+# ============================================================================
+
+---
+# ServiceMonitor - 自动发现应用指标
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: web-app-metrics
+  namespace: monitoring
+  labels:
+    app: web-app
+    release: prometheus
+spec:
+  namespaceSelector:
+    matchNames:
+      - production
+  selector:
+    matchLabels:
+      app: web-app
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+      honorLabels: true
+      metricRelabelings:
+        - sourceLabels: [__name__]
+          regex: 'go_.*'
+          action: drop  # 过滤掉 Go 运行时指标
+
+---
+# PodMonitor - 监控没有 Service 的 Pod
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: sidecar-metrics
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    any: true
+  selector:
+    matchLabels:
+      monitoring: enabled
+  podMetricsEndpoints:
+    - port: sidecar-metrics
+      path: /stats/prometheus
+      interval: 15s
+
+---
+# PrometheusRule - 告警规则
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: web-app-alerts
+  namespace: monitoring
+  labels:
+    app: web-app
+    release: prometheus
+spec:
+  groups:
+    - name: web-app.rules
+      rules:
+        # 高错误率告警
+        - alert: HighErrorRate
+          expr: |
+            (
+              sum(rate(http_requests_total{status=~"5.."}[5m]))
+              /
+              sum(rate(http_requests_total[5m]))
+            ) > 0.01
+          for: 5m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "High error rate detected"
+            description: "Error rate is {{ $value | humanizePercentage }} for the last 5 minutes"
+            runbook_url: "https://wiki.example.com/runbooks/high-error-rate"
+        
+        # 高延迟告警
+        - alert: HighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(http_request_duration_seconds_bucket[5m])) by (le)
+            ) > 0.5
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High latency detected"
+            description: "95th percentile latency is {{ $value }}s"
+        
+        # Pod 重启告警
+        - alert: PodCrashLooping
+          expr: |
+            rate(kube_pod_container_status_restarts_total[10m]) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod is crash looping"
+            description: "Pod {{ $labels.pod }} is restarting frequently"
+        
+        # 资源使用告警
+        - alert: HighMemoryUsage
+          expr: |
+            (
+              container_memory_usage_bytes{container!=""}
+              /
+              container_spec_memory_limit_bytes{container!=""}
+            ) > 0.85
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High memory usage"
+            description: "Memory usage is above 85%"
+        
+        # 预测性告警 - 磁盘将在 24 小时内写满
+        - alert: DiskWillFillIn24Hours
+          expr: |
+            predict_linear(
+              kubelet_volume_stats_available_bytes[1h],
+              24 * 3600
+            ) < 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Disk will fill in 24 hours"
+
+---
+# PrometheusRule - 记录规则（预聚合）
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: web-app-recording
+  namespace: monitoring
+spec:
+  groups:
+    - name: web-app.recording
+      interval: 30s
+      rules:
+        # 预聚合错误率
+        - record: job:http_error_rate:ratio5m
+          expr: |
+            sum(rate(http_requests_total{status=~"5.."}[5m])) by (job)
+            /
+            sum(rate(http_requests_total[5m])) by (job)
+        
+        # 预聚合延迟
+        - record: job:http_latency:p95
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(http_request_duration_seconds_bucket[5m])) by (le, job)
+            )
+        
+        # 预聚合 QPS
+        - record: job:http_qps:rate5m
+          expr: |
+            sum(rate(http_requests_total[5m])) by (job)
+
+---
+# Grafana Dashboard ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-web-app
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  web-app.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Web Application Dashboard",
+        "tags": ["web", "app"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Request Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(http_requests_total[5m])) by (status)",
+                "legendFormat": "{{ status }}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Error Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "job:http_error_rate:ratio5m",
+                "legendFormat": "Error Rate"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Latency (P95)",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "job:http_latency:p95",
+                "legendFormat": "P95 Latency"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "Pod Count",
+            "type": "singlestat",
+            "targets": [
+              {
+                "expr": "count(kube_pod_status_ready{namespace=\"production\"})"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          }
+        ]
+      }
+    }
+
+---
+# 应用暴露指标的示例 Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app-metrics
+  namespace: production
+  labels:
+    app: web-app
+spec:
+  type: ClusterIP
+  selector:
+    app: web-app
+  ports:
+    - name: metrics
+      port: 9090
+      targetPort: 9090

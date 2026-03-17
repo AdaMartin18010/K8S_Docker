@@ -1,0 +1,183 @@
+# ============================================================================
+# 蓝绿部署 (Blue-Green Deployment)
+# 同时运行两个环境，瞬时切换流量，零停机时间
+# ============================================================================
+
+---
+# 蓝色环境 - 当前生产版本
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app-blue
+  namespace: production
+  labels:
+    app: web-app
+    color: blue
+    version: v1
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: web-app
+      color: blue
+  template:
+    metadata:
+      labels:
+        app: web-app
+        color: blue
+        version: v1
+    spec:
+      containers:
+        - name: web-app
+          image: myregistry/web-app:v1.0.0
+          ports:
+            - containerPort: 8080
+          resources:
+            limits:
+              cpu: 500m
+              memory: 256Mi
+
+---
+# 绿色环境 - 新版本（初始副本为 0，发布时扩容）
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app-green
+  namespace: production
+  labels:
+    app: web-app
+    color: green
+    version: v2
+spec:
+  replicas: 0  # 初始为 0，发布时改为 3
+  selector:
+    matchLabels:
+      app: web-app
+      color: green
+  template:
+    metadata:
+      labels:
+        app: web-app
+        color: green
+        version: v2
+    spec:
+      containers:
+        - name: web-app
+          image: myregistry/web-app:v2.0.0
+          ports:
+            - containerPort: 8080
+          resources:
+            limits:
+              cpu: 500m
+              memory: 256Mi
+
+---
+# 活跃 Service - 指向当前生产版本
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app-active
+  namespace: production
+  labels:
+    app: web-app
+    type: active
+spec:
+  type: ClusterIP
+  selector:
+    app: web-app
+    color: blue  # 切换到绿色时改为 green
+  ports:
+    - port: 80
+      targetPort: 8080
+
+---
+# 预览 Service - 用于测试新版本
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app-preview
+  namespace: production
+  labels:
+    app: web-app
+    type: preview
+spec:
+  type: ClusterIP
+  selector:
+    app: web-app
+    color: green  # 始终指向绿色环境
+  ports:
+    - port: 80
+      targetPort: 8080
+
+---
+# 切换脚本 (存储在 ConfigMap 中)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blue-green-switch-script
+  namespace: production
+data:
+  switch.sh: |
+    #!/bin/bash
+    # 蓝绿部署切换脚本
+    
+    # 1. 部署绿色环境
+    echo "Step 1: Scaling up green environment..."
+    kubectl scale deployment web-app-green --replicas=3 -n production
+    
+    # 2. 等待绿色就绪
+    echo "Step 2: Waiting for green to be ready..."
+    kubectl rollout status deployment/web-app-green -n production --timeout=300s
+    
+    # 3. 运行冒烟测试
+    echo "Step 3: Running smoke tests..."
+    # curl -f http://web-app-preview.production.svc.cluster.local/health
+    
+    # 4. 切换流量（修改 Service selector）
+    echo "Step 4: Switching traffic to green..."
+    kubectl patch service web-app-active -n production -p '{"spec":{"selector":{"color":"green"}}}'
+    
+    # 5. 观察一段时间
+    echo "Step 5: Monitoring..."
+    sleep 300
+    
+    # 6. 如果正常，缩容蓝色；如果有问题，回滚
+    echo "Step 6: If all good, scale down blue. Otherwise, rollback."
+    # kubectl scale deployment web-app-blue --replicas=0 -n production
+    # 回滚: kubectl patch service web-app-active -p '{"spec":{"selector":{"color":"blue"}}}'
+
+---
+# Argo Rollout 蓝绿部署 (更高级的版本)
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: web-app-rollout
+  namespace: production
+spec:
+  replicas: 3
+  strategy:
+    blueGreen:
+      activeService: web-app-active
+      previewService: web-app-preview
+      autoPromotionEnabled: false  # 手动触发切换
+      autoPromotionSeconds: 300    # 或 5 分钟后自动切换
+      maxUnavailable: 0
+      scaleDownDelaySeconds: 30
+      scaleDownDelayRevisionLimit: 2
+  selector:
+    matchLabels:
+      app: web-app
+  template:
+    metadata:
+      labels:
+        app: web-app
+    spec:
+      containers:
+        - name: web-app
+          image: myregistry/web-app:v1.0.0
+          ports:
+            - containerPort: 8080
+          resources:
+            limits:
+              cpu: 500m
+              memory: 256Mi

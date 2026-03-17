@@ -1,0 +1,250 @@
+# Default values for web-app
+# This is a YAML-formatted file.
+
+# ==========================================
+# 全局配置
+# ==========================================
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+
+# ==========================================
+# 副本数
+# ==========================================
+replicaCount: 3
+
+# ==========================================
+# 镜像配置
+# ==========================================
+image:
+  repository: myregistry/web-app
+  pullPolicy: IfNotPresent
+  tag: "v1.0.0"
+
+imagePullSecrets:
+  - name: regcred
+
+# ==========================================
+# 名称覆盖
+# ==========================================
+nameOverride: ""
+fullnameOverride: ""
+
+# ==========================================
+# Service Account
+# ==========================================
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+  automountServiceAccountToken: false
+
+# ==========================================
+# Pod 注解
+# ==========================================
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "9090"
+  prometheus.io/path: "/metrics"
+
+# ==========================================
+# Pod 安全上下文
+# ==========================================
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# ==========================================
+# Service 配置
+# ==========================================
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+  annotations: {}
+
+# ==========================================
+# Ingress 配置
+# ==========================================
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: app.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: app-tls
+      hosts:
+        - app.example.com
+
+# ==========================================
+# 资源限制
+# ==========================================
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# ==========================================
+# HPA 配置
+# ==========================================
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+
+# ==========================================
+# Pod Disruption Budget
+# ==========================================
+pdb:
+  enabled: true
+  minAvailable: 2
+  # maxUnavailable: 1
+
+# ==========================================
+# 节点亲和性
+# ==========================================
+nodeSelector:
+  node-type: worker
+
+tolerations:
+  - key: dedicated
+    operator: Equal
+    value: web
+    effect: NoSchedule
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - web-app
+          topologyKey: kubernetes.io/hostname
+
+# ==========================================
+# 健康检查
+# ==========================================
+livenessProbe:
+  enabled: true
+  httpGet:
+    path: /health/live
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  enabled: true
+  httpGet:
+    path: /health/ready
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+startupProbe:
+  enabled: true
+  httpGet:
+    path: /health/startup
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  failureThreshold: 30
+
+# ==========================================
+# 环境变量
+# ==========================================
+env:
+  - name: ENV
+    value: "production"
+  - name: LOG_LEVEL
+    value: "info"
+  - name: LOG_FORMAT
+    value: "json"
+
+# ==========================================
+# ConfigMap
+# ==========================================
+config:
+  enabled: true
+  data:
+    app.conf: |
+      [server]
+      port = 8080
+      read_timeout = 30s
+      
+      [database]
+      max_open_conns = 25
+      max_idle_conns = 10
+
+# ==========================================
+# Secrets
+# ==========================================
+secrets:
+  enabled: true
+  data:
+    DB_PASSWORD: "changeme"
+    API_KEY: "secret"
+
+# ==========================================
+# 持久化存储
+# ==========================================
+persistence:
+  enabled: false
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 10Gi
+
+# ==========================================
+# 依赖配置
+# ==========================================
+postgresql:
+  enabled: false
+  auth:
+    username: app
+    password: secret
+    database: myapp
+  primary:
+    persistence:
+      enabled: true
+      size: 50Gi

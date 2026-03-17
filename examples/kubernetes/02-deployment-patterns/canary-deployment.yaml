@@ -1,0 +1,217 @@
+# ============================================================================
+# 金丝雀发布 (Canary Deployment)
+# 逐步将流量从旧版本迁移到新版本，降低发布风险
+# ============================================================================
+
+---
+# 稳定版本 Deployment (90% 流量)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app-stable
+  namespace: production
+  labels:
+    app: web-app
+    version: v1
+    track: stable
+spec:
+  replicas: 9
+  selector:
+    matchLabels:
+      app: web-app
+      track: stable
+  template:
+    metadata:
+      labels:
+        app: web-app
+        version: v1
+        track: stable
+    spec:
+      containers:
+        - name: web-app
+          image: myregistry/web-app:v1.0.0
+          ports:
+            - containerPort: 8080
+          resources:
+            limits:
+              cpu: 500m
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+
+---
+# 金丝雀版本 Deployment (10% 流量)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app-canary
+  namespace: production
+  labels:
+    app: web-app
+    version: v2
+    track: canary
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web-app
+      track: canary
+  template:
+    metadata:
+      labels:
+        app: web-app
+        version: v2
+        track: canary
+    spec:
+      containers:
+        - name: web-app
+          image: myregistry/web-app:v2.0.0
+          ports:
+            - containerPort: 8080
+          resources:
+            limits:
+              cpu: 500m
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+
+---
+# 总 Service - 包含稳定版和金丝雀版
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app
+  namespace: production
+  labels:
+    app: web-app
+spec:
+  type: ClusterIP
+  selector:
+    app: web-app  # 匹配 stable 和 canary
+  ports:
+    - port: 80
+      targetPort: 8080
+
+---
+# 仅稳定版 Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app-stable
+  namespace: production
+  labels:
+    app: web-app
+    track: stable
+spec:
+  type: ClusterIP
+  selector:
+    app: web-app
+    track: stable
+  ports:
+    - port: 80
+      targetPort: 8080
+
+---
+# 仅金丝雀版 Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app-canary
+  namespace: production
+  labels:
+    app: web-app
+    track: canary
+spec:
+  type: ClusterIP
+  selector:
+    app: web-app
+    track: canary
+  ports:
+    - port: 80
+      targetPort: 8080
+
+---
+# 基于权重的金丝雀路由 (使用 Ingress-Nginx)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web-app-canary
+  namespace: production
+  annotations:
+    nginx.ingress.kubernetes.io/canary: "true"
+    nginx.ingress.kubernetes.io/canary-weight: "10"  # 10% 流量到金丝雀
+    # nginx.ingress.kubernetes.io/canary-by-header: "X-Canary"
+    # nginx.ingress.kubernetes.io/canary-by-header-value: "always"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: app.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web-app-canary
+                port:
+                  number: 80
+
+---
+# 稳定版 Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web-app-stable
+  namespace: production
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: app.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web-app-stable
+                port:
+                  number: 80
+
+---
+# Prometheus 监控规则 - 金丝雀指标
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: canary-metrics
+  namespace: monitoring
+spec:
+  groups:
+    - name: canary
+      rules:
+        - alert: CanaryHighErrorRate
+          expr: |
+            (
+              sum(rate(http_requests_total{track="canary",status=~"5.."}[5m]))
+              /
+              sum(rate(http_requests_total{track="canary"}[5m]))
+            ) > 0.01
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "金丝雀版本错误率过高"
+            description: "金丝雀版本错误率超过 1%，考虑回滚"
+        
+        - alert: CanaryLatencyHigh
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(http_request_duration_seconds_bucket{track="canary"}[5m])) by (le)
+            ) > 0.5
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "金丝雀版本延迟过高"
+            description: "金丝雀版本 P95 延迟超过 500ms"

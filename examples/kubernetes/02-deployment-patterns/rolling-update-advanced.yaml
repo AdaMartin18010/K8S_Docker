@@ -1,0 +1,182 @@
+# ============================================================================
+# 高级滚动更新配置
+# 控制更新速度、保证可用性
+# ============================================================================
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app-rolling
+  namespace: production
+  labels:
+    app: web-app
+spec:
+  replicas: 10
+  
+  # ========== 滚动更新策略 ==========
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # maxSurge: 更新过程中可以超出的 Pod 数量
+      # 可以是数字或百分比
+      maxSurge: 25%  # 最多 25% 的额外 Pod（即最多 12 个）
+      
+      # maxUnavailable: 更新过程中可以不可用的 Pod 数量
+      maxUnavailable: 25%  # 最多 25% 的 Pod 不可用（即最少 7 个可用）
+  
+  # ========== 进度截止时间 ==========
+  # 如果在指定时间内没有进展，认为更新失败
+  progressDeadlineSeconds: 600
+  
+  # ========== 最小就绪时间 ==========
+  # Pod 就绪后等待多久才认为可用
+  minReadySeconds: 30
+  
+  # ========== 修订历史限制 ==========
+  revisionHistoryLimit: 10
+  
+  selector:
+    matchLabels:
+      app: web-app
+  template:
+    metadata:
+      labels:
+        app: web-app
+    spec:
+      # ========== 优雅终止 ==========
+      terminationGracePeriodSeconds: 60
+      
+      containers:
+        - name: web-app
+          image: myregistry/web-app:v1.0.0
+          ports:
+            - containerPort: 8080
+          
+          # ========== 生命周期钩子 ==========
+          lifecycle:
+            # 启动后钩子
+            postStart:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - echo "Container started at $(date)" >> /var/log/startup.log
+            
+            # 终止前钩子
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - |
+                    echo "Received SIGTERM, starting graceful shutdown..."
+                    # 通知负载均衡器停止发送流量
+                    curl -X POST localhost:8080/health/disable
+                    # 等待现有请求完成
+                    sleep 30
+                    echo "Graceful shutdown completed"
+          
+          # ========== 健康检查 ==========
+          startupProbe:
+            httpGet:
+              path: /health/startup
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 30  # 最多等待 150 秒
+          
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            periodSeconds: 5
+            timeoutSeconds: 3
+            successThreshold: 2  # 需要连续 2 次成功才认为就绪
+            failureThreshold: 3
+          
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          
+          resources:
+            limits:
+              cpu: 500m
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+
+---
+# PodDisruptionBudget - 保证更新时最小可用副本
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-app-pdb
+  namespace: production
+spec:
+  minAvailable: 75%  # 至少 75% 的 Pod 必须可用
+  selector:
+    matchLabels:
+      app: web-app
+
+---
+# 更新策略 ConfigMap - 存储不同环境的更新策略
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: deployment-strategies
+  namespace: production
+data:
+  # 生产环境：保守更新
+  production: |
+    maxSurge: 25%
+    maxUnavailable: 10%
+    minReadySeconds: 30
+  
+  # 开发环境：快速更新
+  development: |
+    maxSurge: 100%
+    maxUnavailable: 50%
+    minReadySeconds: 5
+  
+  # 测试环境：瞬时更新
+  staging: |
+    maxSurge: 100%
+    maxUnavailable: 100%
+    minReadySeconds: 5
+
+---
+# 监控更新过程
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: deployment-metrics
+  namespace: monitoring
+spec:
+  groups:
+    - name: deployment
+      rules:
+        - alert: DeploymentStuck
+          expr: |
+            kube_deployment_status_condition{condition="Progressing",status="false"} == 1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Deployment 更新卡住"
+            description: "Deployment {{ $labels.deployment }} 更新进度停滞"
+        
+        - alert: DeploymentReplicasMismatch
+          expr: |
+            kube_deployment_spec_replicas != kube_deployment_status_replicas_available
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Deployment 副本数不匹配"
+            description: "Deployment {{ $labels.deployment }} 期望副本与实际可用副本不一致"

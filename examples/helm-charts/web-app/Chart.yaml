@@ -1,0 +1,24 @@
+apiVersion: v2
+name: web-app
+description: A Helm chart for Kubernetes web application
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - web
+  - application
+  - microservice
+home: https://github.com/example/web-app
+sources:
+  - https://github.com/example/web-app
+maintainers:
+  - name: Platform Team
+    email: platform@example.com
+annotations:
+  category: Application
+  licenses: Apache-2.0
+dependencies:
+  - name: postgresql
+    version: 12.x.x
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
