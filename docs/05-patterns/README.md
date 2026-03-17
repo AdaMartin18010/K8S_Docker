@@ -54,14 +54,14 @@ spec:
     # 主应用容器
     - name: myapp
       image: myapp:v1.0.0
-    
+
     # Sidecar: 日志收集
     - name: fluent-bit
       image: fluent/fluent-bit:latest
       volumeMounts:
         - name: logs
           mountPath: /var/log/myapp
-    
+
     # Sidecar: 监控代理
     - name: prometheus-exporter
       image: prom/node-exporter:latest

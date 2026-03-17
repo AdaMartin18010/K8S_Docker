@@ -1,22 +1,146 @@
-# K8S_Docker
+# K8S_Docker - 云原生技术知识体系
 
-k8s and docker.
+> 基于主题的 Docker & Kubernetes 知识库 (2025 Edition)
 
-请全面梳理下 docker k8s  体系结构 最权威广泛的全面的理论 系统功能 应用特性等 对齐当前2026年3月17日 最充分全面权威的信息内容：
+---
 
-1. 系统 管理 控制 弹性 部署  运维  等 各个层次的全面梳理
-2. 标准 解释 形式论证 关联分析 静态结构逻辑分析 动态系统分析 系统控制分析 形式化证明等方面的内容
-3. 与 层次 模型 协议之间的全面对比 包括语法 语义模型等 解释论证形式证明等
-4. 使用范畴论 类型 系统 控制等 理论模型 来全面分析论证
-5. 结合国际最新最全面的权威内容 对标 后续的发展等方面
-结合 通信 控制 算法设计 系统设计 设计模式 并发并行同步异步模式 分布式设计模式 工作流设计模式等
-架构设计 系统设计等 有关的分析论证等
-6. 结合概念定义属性关系解释论证形式证明等 结合多种思维表征方式 比如
-思维导图 决策树图 语法语义树图 场景应用树图 UML图 等 结合 实例 反例示例等
-7. 从控制谱系 工程谱系 形式语言语义谱系 可计算性计算复杂性谱系等 系统谱系等方面来梳理等
+## 📚 项目简介
 
-8. 结合不同行业 领域的成功案例 应用  等等来全面分析论证
-9. 结合各个以上未提及到 但是很重要的方面梳理等 保持文档结构一致性 比如 目录 主题与子主题等
-10 如果需要代码 请使用go 来示例等
-10. 重点关注 docker k8s 全生态分析 理论分析 系统分析 组件分析 堆栈分析 技术分析 性能 可靠性 等
-全面梳理分析等 关注点是 容器化 和 沙盒化webassembly 等全生态链路分析论证 理论部分大概精准概括就好了
+本项目是一个全面、系统的 Docker 和 Kubernetes 知识库，涵盖从基础概念到生产实践的全方位内容。
+
+- **版本对齐**: Docker 25.x+ / Kubernetes 1.30-1.32
+- **技术栈**: 采用 BuildKit 1.0、Gateway API、原生 Sidecar 等最新特性
+- **实例语言**: Go
+
+---
+
+## 📁 项目结构
+
+```
+K8S_Docker/
+├── docs/                    # 📖 主题式文档 (3.02MB, 39+ 文件)
+│   ├── 00-overview/         # 项目概览与学习指南
+│   ├── 01-fundamentals/     # 容器基础理论
+│   ├── 02-docker/           # Docker 容器技术
+│   ├── 03-kubernetes/       # Kubernetes 核心
+│   ├── 04-ecosystem/        # 云原生生态
+│   ├── 05-tools/            # 工具链
+│   ├── 06-practices/        # 工程实践
+│   └── 99-appendix/         # 附录
+├── examples/                # 💻 代码示例 (22KB, 69+ 文件)
+│   ├── docker/              # Dockerfile 最佳实践
+│   ├── kubernetes/          # K8s 资源清单
+│   ├── go-client/           # client-go 示例
+│   ├── helm/                # Helm Charts
+│   ├── ci-cd/               # CI/CD 流水线
+│   └── patterns/            # 设计模式
+└── docs-backup/             # 📦 归档的原始文档
+```
+
+---
+
+## 🗺️ 文档导航
+
+### 快速入门
+- [项目概览](docs/00-overview/README.md)
+- [学习路线图](docs/00-overview/roadmap.md)
+- [阅读指南](docs/00-overview/guide.md)
+
+### 核心内容
+
+| 主题 | 文档 | 示例 |
+|------|------|------|
+| **容器基础** | [docs/01-fundamentals/](docs/01-fundamentals/) | - |
+| **Docker** | [docs/02-docker/](docs/02-docker/) | [examples/docker/](examples/docker/) |
+| **Kubernetes** | [docs/03-kubernetes/](docs/03-kubernetes/) | [examples/kubernetes/](examples/kubernetes/) |
+| **云原生生态** | [docs/04-ecosystem/](docs/04-ecosystem/) | - |
+| **工程实践** | [docs/06-practices/](docs/06-practices/) | [examples/patterns/](examples/patterns/) |
+
+---
+
+## ✨ 2025 关键更新
+
+### 移除 (已废弃)
+- ❌ PodSecurityPolicy (K8s 1.25 移除)
+- ❌ Dockershim (K8s 1.24 移除)
+- ❌ CephFS/RBD 内置插件
+
+### 新增 (重点特性)
+- ✅ BuildKit 1.0 (Docker 默认构建器)
+- ✅ Docker Scout (安全扫描)
+- ✅ Gateway API v1.1+
+- ✅ 原生 Sidecar 容器 (v1.29+ GA)
+- ✅ 原地 Pod 垂直扩缩容
+
+---
+
+## 🚀 快速开始
+
+### 查看示例
+
+```bash
+# Docker 多阶段构建
+cat examples/docker/multi-stage/Dockerfile
+
+# Kubernetes Deployment
+kubectl apply -f examples/kubernetes/02-workloads/deployment.yaml
+
+# 运行 Go 示例
+cd examples/go-client/01-basic-ops
+go run main.go
+```
+
+---
+
+## 📊 内容统计
+
+| 类别 | 数量 | 大小 |
+|------|------|------|
+| 文档文件 | 39+ | 3.02 MB |
+| 代码示例 | 69+ | 22 KB |
+| 主题分类 | 8 大主题 | 21 子目录 |
+
+---
+
+## 📖 推荐阅读顺序
+
+```
+1. 基础篇 (01-fundamentals)
+   ├── 容器技术概述
+   ├── OCI 开放容器标准
+   └── 容器 vs 虚拟机
+
+2. Docker 篇 (02-docker)
+   ├── Docker 核心概念
+   ├── Dockerfile 最佳实践
+   ├── 镜像与仓库
+   └── Docker Compose
+
+3. Kubernetes 篇 (03-kubernetes)
+   ├── 核心概念
+   ├── 工作负载管理
+   ├── 网络与服务
+   ├── 存储
+   └── 运维实践
+
+4. 进阶篇 (04-ecosystem + 06-practices)
+   ├── 服务网格
+   ├── GitOps
+   ├── 设计模式
+   └── 案例研究
+```
+
+---
+
+## 🔗 相关资源
+
+- [命令速查表](docs/99-appendix/commands.md)
+- [资源推荐](docs/99-appendix/resources.md)
+- [K8s 官方文档](https://kubernetes.io/docs/)
+- [Docker 官方文档](https://docs.docker.com/)
+
+---
+
+## 📝 许可证
+
+[LICENSE](LICENSE)

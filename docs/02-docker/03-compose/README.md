@@ -7,6 +7,7 @@
 ## 简介
 
 Docker Compose 是 Docker 官方的多容器编排工具，适合：
+
 - 本地开发环境
 - 测试环境
 - 小型生产部署
@@ -28,7 +29,7 @@ services:
       - redis
     environment:
       - DATABASE_URL=postgres://db/myapp
-  
+
   db:
     image: postgres:16-alpine
     volumes:
@@ -37,7 +38,7 @@ services:
       POSTGRES_PASSWORD_FILE: /run/secrets/db_password
     secrets:
       - db_password
-  
+
   redis:
     image: redis:7-alpine
     volumes:

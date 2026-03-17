@@ -6,7 +6,7 @@
 
 ## 本章内容
 
-1. [控制平面组件](./control-plane.md)
+1. [Kubernetes 架构原理](./control-plane.md)
 2. [数据平面组件](./data-plane.md)
 3. [核心对象模型](./object-model.md)
 4. [控制器模式](./controller-pattern.md)

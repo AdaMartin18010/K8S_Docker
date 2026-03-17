@@ -28,23 +28,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Build
         uses: docker/build-push-action@v5
         with:
           context: .
           push: false
           tags: myapp:${{ github.sha }}
-      
+
       - name: Scan
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: myapp:${{ github.sha }}
-      
+
       - name: Push
         run: |
           docker push myapp:${{ github.sha }}
-      
+
       - name: Deploy
         run: |
           kubectl set image deployment/myapp app=myapp:${{ github.sha }}
