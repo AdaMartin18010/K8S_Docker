@@ -1,0 +1,114 @@
+# K8s 1.33+ 原生 Sidecar 容器示例
+# Sidecar 容器现已 GA，使用 restartPolicy: Always
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp-with-sidecar
+  labels:
+    app: myapp
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: myapp
+  template:
+    metadata:
+      labels:
+        app: myapp
+    spec:
+      # 初始化容器中的 Sidecar
+      initContainers:
+        # 原生 Sidecar: 在 main 容器之前启动，在 main 容器之后终止
+        - name: istio-proxy
+          image: istio/proxyv2:1.24
+          restartPolicy: Always  # 关键: 使其成为原生 Sidecar
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          # Sidecar 生命周期:
+          # 1. 在所有普通 initContainers 之后启动
+          # 2. 在 main 容器之前变为 Ready
+          # 3. 在 main 容器终止后继续运行，直到完全关闭
+          
+        # 普通初始化容器 (在 Sidecar 之前运行)
+        - name: init-myservice
+          image: busybox:1.35
+          command: ['sh', '-c', 'echo "Initializing..."; sleep 5']
+      
+      # 主应用容器
+      containers:
+        - name: myapp
+          image: myapp:v1.0.0
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PROXY_HOST
+              value: localhost  # 通过 localhost 访问 Sidecar
+            - name: PROXY_PORT
+              value: "15001"
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          # 优雅关闭时，Sidecar 会继续运行直到完全关闭
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]
+---
+# 多 Sidecar 示例
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-sidecar-demo
+spec:
+  initContainers:
+    # Sidecar 1: 日志收集
+    - name: log-collector
+      image: fluent/fluent-bit:3.0
+      restartPolicy: Always
+      volumeMounts:
+        - name: logs
+          mountPath: /var/log/app
+      
+    # Sidecar 2: 监控代理
+    - name: metrics-agent
+      image: prom/prometheus:v2.55
+      restartPolicy: Always
+      volumeMounts:
+        - name: metrics
+          mountPath: /metrics
+          
+    # 普通 initContainer
+    - name: setup
+      image: busybox:1.35
+      command: ['sh', '-c', 'echo "Setup complete"']
+      
+  containers:
+    - name: main-app
+      image: myapp:v1.0
+      volumeMounts:
+        - name: logs
+          mountPath: /app/logs
+        - name: metrics
+          mountPath: /app/metrics
+          
+  volumes:
+    - name: logs
+      emptyDir: {}
+    - name: metrics
+      emptyDir: {}

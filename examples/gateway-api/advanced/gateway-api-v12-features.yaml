@@ -1,0 +1,168 @@
+# Gateway API v1.2+ 新特性示例
+# 包括: 超时、重试、百分比镜像、CORS、重试预算
+---
+# 1. HTTPRoute 超时 (GA in v1.2)
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: api-with-timeout
+spec:
+  parentRefs:
+    - name: production-gateway
+  hostnames:
+    - api.example.com
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api
+      backendRefs:
+        - name: api-service
+          port: 8080
+      # v1.2: 超时配置
+      timeouts:
+        request: 30s        # 整个请求的超时
+        backendRequest: 10s # 后端连接超时
+---
+# 2. HTTPRoute 重试 (Experimental in v1.2)
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: api-with-retry
+spec:
+  parentRefs:
+    - name: production-gateway
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api
+      backendRefs:
+        - name: api-service
+          port: 8080
+      # v1.2: 重试配置
+      retry:
+        codes: [500, 502, 503, 504]  # 需要重试的 HTTP 状态码
+        attempts: 3                   # 最大重试次数
+        backoff: 2s                   # 重试间隔
+---
+# 3. 百分比流量镜像 (Experimental in v1.2)
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: traffic-mirror
+spec:
+  parentRefs:
+    - name: production-gateway
+  rules:
+    - backendRefs:
+        - name: production-service
+          port: 8080
+      filters:
+        - type: RequestMirror
+          requestMirror:
+            backendRef:
+              name: staging-service
+              port: 8080
+            percent: 10   # 10% 流量镜像
+---
+# 4. CORS 过滤器 (Experimental in v1.3)
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: cors-enabled-route
+spec:
+  parentRefs:
+    - name: production-gateway
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api
+      filters:
+        - type: CORS
+          cors:
+            allowOrigins:
+              - "https://app.example.com"
+              - "https://admin.example.com"
+            allowMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+            allowHeaders:
+              - Authorization
+              - Content-Type
+              - X-Request-ID
+            allowCredentials: true
+            maxAge: 3600
+      backendRefs:
+        - name: api-service
+          port: 8080
+---
+# 5. 重试预算 (Experimental in v1.3)
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: retry-budget-route
+spec:
+  parentRefs:
+    - name: production-gateway
+  rules:
+    - backendRefs:
+        - name: api-service
+          port: 8080
+      retry:
+        budget:
+          percent: 20       # 最多 20% 的请求可以重试
+          minRetries: 10    # 最少重试次数
+---
+# 6. BackendTLSPolicy (v1.2+)
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: BackendTLSPolicy
+metadata:
+  name: backend-tls
+spec:
+  targetRef:
+    group: ""
+    kind: Service
+    name: secure-backend
+  tls:
+    certificateRefs:
+      - name: backend-cert
+        kind: Secret
+        group: ""
+    subjectAltNames:
+      - "backend.example.com"
+      - "spiffe://cluster.local/ns/backend/sa/default"
+---
+# 7. WebSocket 支持 (GA in v1.2)
+apiVersion: v1
+kind: Service
+metadata:
+  name: websocket-service
+spec:
+  selector:
+    app: websocket-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+      appProtocol: kubernetes.io/ws  # WebSocket 协议标记
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: websocket-route
+spec:
+  parentRefs:
+    - name: production-gateway
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /ws
+      backendRefs:
+        - name: websocket-service
+          port: 80

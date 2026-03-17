@@ -70,11 +70,11 @@ kubectl wait --for=condition=available deployment/ml-pipeline -n kubeflow --time
 ```hcl
 module "kubeflow" {
   source = "terraform-google-modules/kubernetes-engine/google//modules/kubeflow"
-  
+
   project_id = var.project_id
   cluster_name = "ml-cluster"
   kubernetes_version = "1.33.2"
-  
+
   # 组件选择
   enable_katib = true
   enable_kserve = true
@@ -114,11 +114,11 @@ def preprocess(
 ):
     import pandas as pd
     from sklearn.preprocessing import StandardScaler
-    
+
     df = pd.read_csv(input_data.path)
     scaler = StandardScaler()
     df_scaled = scaler.fit_transform(df)
-    
+
     pd.DataFrame(df_scaled).to_csv(output_data.path, index=False)
 
 @dsl.component(
@@ -134,14 +134,14 @@ def train(
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.model_selection import train_test_split
     import pandas as pd
-    
+
     df = pd.read_csv(training_data.path)
     X, y = df.drop('target', axis=1), df['target']
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
-    
+
     clf = RandomForestClassifier(n_estimators=100)
     clf.fit(X_train, y_train)
-    
+
     accuracy = clf.score(X_test, y_test)
     joblib.dump(clf, model.path)
 
@@ -159,12 +159,12 @@ def ml_pipeline(
             artifact_class=Dataset
         ).output
     )
-    
+
     # 模型训练
     train_task = train(
         training_data=preprocess_task.outputs['output_data']
     )
-    
+
     # 条件判断
     with dsl.Condition(train_task.outputs['accuracy'] > 0.8):
         deploy_task = deploy_model(
@@ -298,10 +298,10 @@ spec:
     # 自动扩缩容
     minReplicas: 1
     maxReplicas: 10
-    
+
     # 模型存储
     storageUri: "gs://kfserving-examples/models/sklearn/1.0/model"
-    
+
     # 运行时
     sklearn:
       protocolVersion: v1
@@ -312,7 +312,7 @@ spec:
         limits:
           cpu: 1000m
           memory: 1Gi
-  
+
   # 变换器（预处理/后处理）
   transformer:
     containers:
@@ -322,7 +322,7 @@ spec:
         requests:
           cpu: 100m
           memory: 256Mi
-  
+
   # 解释器
   explainer:
     alibi:

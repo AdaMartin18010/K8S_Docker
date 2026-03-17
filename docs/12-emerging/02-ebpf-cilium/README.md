@@ -22,6 +22,7 @@ Kube-Proxy iptables 模式问题:
 ```
 
 **性能对比**:
+
 | 指标 | iptables | IPVS | eBPF (Cilium) |
 |------|----------|------|---------------|
 | 查找复杂度 | O(n) | O(1) | O(1) |
@@ -105,6 +106,7 @@ loadBalancer:
 ```
 
 **DSR 优势**:
+
 - 响应流量不经过负载均衡器，降低延迟
 - 减少负载均衡器带宽压力
 - 特别适合大流量场景
@@ -227,7 +229,7 @@ spec:
         dns:
         - matchPattern: "*.amazonaws.com"
         - matchName: "api.stripe.com"
-  
+
   # 基于 FQDN 的访问控制
   - toFQDNs:
     - matchName: "api.stripe.com"
@@ -275,7 +277,7 @@ hubble:
     enabled: true
   ui:
     enabled: true
-  
+
   # 流量监控
   metrics:
     enabled:

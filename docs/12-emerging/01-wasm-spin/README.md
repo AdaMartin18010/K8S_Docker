@@ -196,12 +196,12 @@ fn handle_request(req: Request) -> Result<Response, String> {
             .status(200)
             .header("content-type", "application/json")
             .body(Some(r#"{"status": "healthy"}"#.into()))?),
-        
+
         "/api/users" => Ok(http::Response::builder()
             .status(200)
             .header("content-type", "application/json")
             .body(Some(r#"[{"id": 1, "name": "Alice"}]"#.into()))?),
-        
+
         _ => Ok(http::Response::builder()
             .status(404)
             .body(Some("Not Found".into()))?),

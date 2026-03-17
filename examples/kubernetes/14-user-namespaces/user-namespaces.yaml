@@ -1,0 +1,66 @@
+# K8s 1.33+ 用户命名空间示例
+# User Namespaces 现已在 Beta 中默认启用
+# 需要: containerd 2.0+ 和 Linux 内核支持
+apiVersion: v1
+kind: Pod
+metadata:
+  name: userns-demo
+spec:
+  # 启用用户命名空间
+  hostUsers: false
+  containers:
+    - name: app
+      image: nginx:alpine
+      securityContext:
+        # 容器内以 root 运行
+        runAsUser: 0
+        runAsGroup: 0
+        # 但在主机上映射为非特权用户!
+      ports:
+        - containerPort: 80
+      resources:
+        limits:
+          memory: "128Mi"
+          cpu: "100m"
+---
+# 安全上下文示例
+apiVersion: v1
+kind: Pod
+metadata:
+  name: secure-userns-pod
+spec:
+  hostUsers: false
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: app
+      image: myapp:v1.0
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+        readOnlyRootFilesystem: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      resources:
+        limits:
+          memory: "256Mi"
+          cpu: "200m"
+---
+# 验证命令
+# 1. 创建 Pod
+#    kubectl apply -f user-namespaces.yaml
+#
+# 2. 进入容器 (容器内是 root)
+#    kubectl exec -it userns-demo -- id
+#    # 输出: uid=0(root) gid=0(root)
+#
+# 3. 在节点上查看进程 (映射为非特权用户)
+#    # SSH 到节点
+#    ps aux | grep nginx
+#    # 输出: 100000  ...  nginx (映射后的 UID)
+#
+# 4. 检查 Pod 的 UID 映射
+#    kubectl get pod userns-demo -o yaml | grep -A 5 hostUsers

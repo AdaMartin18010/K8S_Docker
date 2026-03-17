@@ -1,0 +1,70 @@
+# K8s 1.33+ 原地 Pod 垂直扩容示例
+# InPlacePodVerticalScaling 特性现已进入 Beta
+apiVersion: v1
+kind: Pod
+metadata:
+  name: inplace-resize-demo
+  annotations:
+    # 启用原地垂直扩容
+    resize.kubernetes.io/resources: "InPlacePodVerticalScaling"
+spec:
+  containers:
+    - name: app
+      image: nginx:alpine
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+        limits:
+          cpu: "500m"
+          memory: "512Mi"
+---
+# 带初始资源配置的 Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-with-resize
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: resize-demo
+  template:
+    metadata:
+      labels:
+        app: resize-demo
+      annotations:
+        resize.kubernetes.io/resources: "InPlacePodVerticalScaling"
+    spec:
+      containers:
+        - name: app
+          image: myapp:v1.0
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+---
+# 使用说明
+# 1. 创建 Pod
+#    kubectl apply -f inplace-resizing.yaml
+#
+# 2. 运行时调整资源 (无需重启 Pod)
+#    kubectl patch pod inplace-resize-demo --patch '{
+#      "spec":{
+#        "containers":[{
+#          "name":"app",
+#          "resources":{"requests":{"cpu":"1","memory":"1Gi"}}
+#        }]
+#      }
+#    }'
+#
+# 3. 查看资源调整状态
+#    kubectl get pod inplace-resize-demo -o yaml | grep -A 10 resizeStatus
+#
+# 4. 验证调整结果
+#    kubectl top pod inplace-resize-demo

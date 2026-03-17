@@ -8,10 +8,10 @@
 
 | 资源 | 链接 | 说明 |
 |------|------|------|
-| Docker 官方文档 | https://docs.docker.com/ | 最权威的 Docker 文档 |
-| Kubernetes 官方文档 | https://kubernetes.io/docs/ | 最权威的 K8s 文档 |
-| CNCF 全景 | https://landscape.cncf.io/ | 云原生技术全景图 |
-| OCI 规范 | https://opencontainers.org/ | 开放容器标准 |
+| Docker 官方文档 | <https://docs.docker.com/> | 最权威的 Docker 文档 |
+| Kubernetes 官方文档 | <https://kubernetes.io/docs/> | 最权威的 K8s 文档 |
+| CNCF 全景 | <https://landscape.cncf.io/> | 云原生技术全景图 |
+| OCI 规范 | <https://opencontainers.org/> | 开放容器标准 |
 
 ---
 
@@ -68,10 +68,10 @@
 
 | 资源 | 链接 |
 |------|------|
-| KubeWeekly | https://kubeweekly.io/ |
-| CNCF 博客 | https://www.cncf.io/blog/ |
-| Kubernetes 博客 | https://kubernetes.io/blog/ |
-| 云原生社区 | https://cloudnative.to/ |
+| KubeWeekly | <https://kubeweekly.io/> |
+| CNCF 博客 | <https://www.cncf.io/blog/> |
+| Kubernetes 博客 | <https://kubernetes.io/blog/> |
+| 云原生社区 | <https://cloudnative.to/> |
 
 ---
 
