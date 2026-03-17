@@ -1,0 +1,197 @@
+# Alertmanager 配置 - 多路由多渠道告警
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: alertmanager-main
+  namespace: monitoring
+stringData:
+  alertmanager.yaml: |
+    global:
+      smtp_smarthost: 'smtp.example.com:587'
+      smtp_from: 'alerts@example.com'
+      smtp_auth_username: 'alerts@example.com'
+      smtp_auth_password: '${SMTP_PASSWORD}'
+      slack_api_url: '${SLACK_WEBHOOK_URL}'
+      pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+
+    # 抑制规则 - 避免重复告警
+    inhibit_rules:
+    # 如果集群 down，抑制节点告警
+    - source_matchers:
+        - severity = "critical"
+        - alertname = "ClusterDown"
+      target_matchers:
+        - severity =~ "warning|critical"
+      equal:
+        - cluster
+    
+    # 如果 namespace down，抑制 pod 告警
+    - source_matchers:
+        - severity = "critical"
+        - alertname = "NamespaceDown"
+      target_matchers:
+        - severity =~ "warning|critical"
+      equal:
+        - namespace
+
+    # 路由树
+    route:
+      group_by: ['alertname', 'cluster', 'namespace', 'severity']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      receiver: 'default'
+      
+      routes:
+      # 关键告警 - PagerDuty + Slack + Email
+      - matchers:
+        - severity = "critical"
+        receiver: 'critical'
+        continue: true
+        group_wait: 0s
+        repeat_interval: 5m
+      
+      # 警告告警 - Slack + Email
+      - matchers:
+        - severity = "warning"
+        receiver: 'warning'
+        continue: false
+      
+      # 信息告警 - 仅 Slack
+      - matchers:
+        - severity = "info"
+        receiver: 'info'
+        continue: false
+      
+      # API Server 告警 - 特定路由
+      - matchers:
+        - alertname =~ "APIServer.*|Etcd.*"
+        receiver: 'platform-team'
+        continue: true
+      
+      # 应用告警 - 路由到应用团队
+      - matchers:
+        - namespace =~ "app-.*|prod-.*"
+        receiver: 'app-team'
+        continue: true
+      
+      # 数据库告警 - 路由到 DBA
+      - matchers:
+        - alertname =~ "Postgres.*|MySQL.*|MongoDB.*|Redis.*"
+        receiver: 'dba-team'
+        continue: true
+
+    receivers:
+    - name: 'default'
+      slack_configs:
+      - channel: '#alerts-default'
+        title: '{{ template "slack.default.title" . }}'
+        text: '{{ template "slack.default.text" . }}'
+
+    - name: 'critical'
+      pagerduty_configs:
+      - service_key: '${PAGERDUTY_SERVICE_KEY}'
+        severity: critical
+        description: '{{ .GroupLabels.alertname }}: {{ .CommonAnnotations.summary }}'
+        details:
+          cluster: '{{ .CommonLabels.cluster }}'
+          namespace: '{{ .CommonLabels.namespace }}'
+          pod: '{{ .CommonLabels.pod }}'
+      
+      slack_configs:
+      - channel: '#alerts-critical'
+        title: '🚨 CRITICAL: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Cluster:* {{ .Labels.cluster }}
+          *Namespace:* {{ .Labels.namespace }}
+          *Pod:* {{ .Labels.pod }}
+          *Started:* {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+        send_resolved: true
+      
+      email_configs:
+      - to: 'oncall@example.com'
+        subject: '🚨 CRITICAL Alert: {{ .GroupLabels.alertname }}'
+        html: |
+          <h3>Critical Alert</h3>
+          <table>
+          {{ range .Alerts }}
+            <tr>
+              <td><strong>Alert:</strong></td>
+              <td>{{ .Annotations.summary }}</td>
+            </tr>
+            <tr>
+              <td><strong>Description:</strong></td>
+              <td>{{ .Annotations.description }}</td>
+            </tr>
+          {{ end }}
+          </table>
+
+    - name: 'warning'
+      slack_configs:
+      - channel: '#alerts-warning'
+        title: '⚠️ WARNING: {{ .GroupLabels.alertname }}'
+        text: '{{ template "slack.default.text" . }}'
+        send_resolved: true
+      
+      email_configs:
+      - to: 'team@example.com'
+        subject: 'Warning: {{ .GroupLabels.alertname }}'
+
+    - name: 'info'
+      slack_configs:
+      - channel: '#alerts-info'
+        title: 'ℹ️ INFO: {{ .GroupLabels.alertname }}'
+        text: '{{ template "slack.default.text" . }}'
+        send_resolved: false
+
+    - name: 'platform-team'
+      slack_configs:
+      - channel: '#platform-alerts'
+        title: 'Platform Alert: {{ .GroupLabels.alertname }}'
+      
+      email_configs:
+      - to: 'platform@example.com'
+
+    - name: 'app-team'
+      slack_configs:
+      - channel: '#app-alerts'
+        title: 'App Alert: {{ .GroupLabels.alertname }}'
+      
+      email_configs:
+      - to: 'app-team@example.com'
+
+    - name: 'dba-team'
+      slack_configs:
+      - channel: '#dba-alerts'
+        title: 'DB Alert: {{ .GroupLabels.alertname }}'
+      
+      email_configs:
+      - to: 'dba@example.com'
+
+    templates:
+    - '/etc/alertmanager/config/*.tmpl'
+
+---
+# 自定义模板 ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-templates
+  namespace: monitoring
+data:
+  default.tmpl: |
+    {{ define "slack.default.title" }}{{ .GroupLabels.alertname }}{{ end }}
+    {{ define "slack.default.text" }}
+    {{ range .Alerts }}
+    *Alert:* {{ .Annotations.summary }}
+    *Description:* {{ .Annotations.description }}
+    *Severity:* {{ .Labels.severity }}
+    {{ if .Labels.namespace }}*Namespace:* {{ .Labels.namespace }}{{ end }}
+    {{ if .Labels.pod }}*Pod:* {{ .Labels.pod }}{{ end }}
+    {{ end }}
+    {{ end }}

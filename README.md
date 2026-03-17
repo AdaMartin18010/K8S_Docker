@@ -11,6 +11,7 @@
 - **版本对齐**: Docker 28.x+ / Kubernetes 1.33-1.34
 - **技术栈**: BuildKit 1.0、containerd 2.0、Gateway API v1.2+、eBPF/Cilium 1.18
 - **实例语言**: Go
+- **知识图谱**: 9张多维认知图 + 3大速查表
 
 ---
 
@@ -18,7 +19,7 @@
 
 ```text
 K8S_Docker/
-├── docs/                    # 📖 主题式文档 (3.5MB+, 120+ 文件)
+├── docs/                    # 📖 主题式文档 (4.0MB+, 130+ 文件)
 │   ├── 00-overview/         # 项目概览与学习指南
 │   ├── 01-fundamentals/     # 容器基础理论
 │   ├── 02-docker/           # Docker 容器技术
@@ -27,7 +28,7 @@ K8S_Docker/
 │   ├── 05-tools/            # 工具链
 │   ├── 06-practices/        # 工程实践
 │   └── 99-appendix/         # 附录
-├── examples/                # 💻 代码示例 (200+ 文件)
+├── examples/                # 💻 代码示例 (210+ 文件)
 │   ├── docker/              # Dockerfile最佳实践
 │   ├── kubernetes/          # K8s 资源清单
 │   ├── go-client/           # client-go / eBPF 示例
@@ -62,6 +63,8 @@ K8S_Docker/
 | **Kubernetes** | [docs/03-kubernetes/](docs/03-kubernetes/) | [examples/kubernetes/](examples/kubernetes/) |
 | **云原生生态** | [docs/04-ecosystem/](docs/04-ecosystem/) | [examples/](examples/) |
 | **工程实践** | [docs/06-practices/](docs/06-practices/) | [examples/patterns/](examples/patterns/) |
+| **CI/CD** | [docs/04-ecosystem/gitops/](docs/04-ecosystem/gitops/) | [examples/ci-cd/](examples/ci-cd/) |
+| **可观测性** | [docs/03-kubernetes/observability/](docs/03-kubernetes/observability/) | [examples/monitoring/](examples/monitoring/) |
 
 ---
 
@@ -102,9 +105,11 @@ K8S_Docker/
 
 | 类别 | 数量 | 大小 |
 |------|------|------|
-| 文档文件 | 120+ | 4.0+ MB |
-| 代码示例 | 200+ | 300+ KB |
-| 主题分类 | 8 大主题 | 50+ 子目录 |
+| 文档文件 | 130+ | 4.0+ MB |
+| 代码示例 | 210+ | 350+ KB |
+| 主题分类 | 8 大主题 | 55+ 子目录 |
+| 知识图谱 | 9 张 | 260 KB |
+| 速查表 | 3 份 | 15 KB |
 
 ---
 
@@ -181,13 +186,41 @@ K8S_Docker/
 
 ---
 
+## 📋 速查表 (新增)
+
+| 速查表 | 文件 | 内容 |
+|--------|------|------|
+| **kubectl** | [kubectl-cheatsheet.md](docs/99-appendix/kubectl-cheatsheet.md) | 集群操作、排障、高级技巧 |
+| **Dockerfile** | [dockerfile-cheatsheet.md](docs/99-appendix/dockerfile-cheatsheet.md) | 构建优化、安全最佳实践 |
+| **Helm** | [helm-cheatsheet.md](docs/99-appendix/helm-cheatsheet.md) | 模板语法、Chart 开发 |
+
+---
+
 ## 🔗 相关资源
 
+### 附录
+
 - [命令速查表](docs/99-appendix/commands.md)
+- [kubectl 速查表](docs/99-appendix/kubectl-cheatsheet.md)
+- [Dockerfile 速查表](docs/99-appendix/dockerfile-cheatsheet.md)
+- [Helm 速查表](docs/99-appendix/helm-cheatsheet.md)
 - [术语表](docs/99-appendix/glossary.md)
 - [资源推荐](docs/99-appendix/resources.md)
-- [知识图谱](docs/99-appendix/knowledge-graphs/)
+
+### 知识图谱
+
+- [知识图谱总览](docs/99-appendix/knowledge-graphs/)
+- [知识全景图](docs/99-appendix/knowledge-graphs/mindmap-cloudnative.md)
+- [技术选型对比](docs/99-appendix/knowledge-graphs/comparison-matrix.md)
+- [场景决策路径](docs/99-appendix/knowledge-graphs/decision-trees.md)
 - [维护计划](docs/99-appendix/knowledge-graphs/MAINTENANCE_PLAN.md)
+
+### 示例精选
+
+- [Prometheus 告警规则](examples/monitoring/prometheus-rules/)
+- [GitHub Actions 可复用工作流](examples/ci-cd/github-actions/reusable-workflows/)
+- [Gateway API v1.2 示例](examples/gateway-api/)
+- [Sidecar 容器模式](examples/kubernetes/sidecar-native/)
 
 ---
 

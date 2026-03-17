@@ -1,0 +1,324 @@
+# Kubernetes 生产环境监控告警规则
+# 适用于 Prometheus + Alertmanager
+---
+# 节点级别告警
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: node-alerts
+  namespace: monitoring
+spec:
+  groups:
+  - name: node
+    rules:
+    # 节点 down
+    - alert: NodeDown
+      expr: up{job="kubernetes-nodes"} == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Node {{ $labels.instance }} is down"
+        description: "Node {{ $labels.instance }} has been down for more than 5 minutes."
+    
+    # 磁盘使用率
+    - alert: NodeDiskPressure
+      expr: |
+        (
+          node_filesystem_avail_bytes{job="node-exporter",fstype!="",fstype!="tmpfs"} /
+          node_filesystem_size_bytes{job="node-exporter",fstype!="",fstype!="tmpfs"}
+        ) < 0.1
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Node {{ $labels.instance }} disk pressure"
+        description: "Disk usage is above 90% on {{ $labels.instance }}"
+    
+    # 内存使用率
+    - alert: NodeMemoryPressure
+      expr: |
+        (
+          node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes
+        ) / node_memory_MemTotal_bytes > 0.85
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Node {{ $labels.instance }} memory pressure"
+        description: "Memory usage is above 85% on {{ $labels.instance }}"
+    
+    # CPU 使用率
+    - alert: NodeHighCPUUsage
+      expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Node {{ $labels.instance }} high CPU usage"
+        description: "CPU usage is above 80% on {{ $labels.instance }}"
+    
+    # 文件描述符使用率
+    - alert: NodeFileDescriptorPressure
+      expr: |
+        node_filefd_allocated{job="node-exporter"} / node_filefd_maximum{job="node-exporter"} > 0.8
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Node {{ $labels.instance }} file descriptor pressure"
+        description: "File descriptor usage is above 80%"
+
+---
+# Pod 级别告警
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: pod-alerts
+  namespace: monitoring
+spec:
+  groups:
+  - name: pod
+    rules:
+    # Pod CrashLoopBackOff
+    - alert: PodCrashLooping
+      expr: |
+        rate(kube_pod_container_status_restarts_total[10m]) > 0
+        and
+        kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff"} == 1
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Pod {{ $labels.pod }} is crash looping"
+        description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is restarting frequently"
+    
+    # Pod Not Ready
+    - alert: PodNotReady
+      expr: |
+        kube_pod_status_phase{phase!="Running",phase!="Succeeded"} == 1
+        and
+        kube_pod_status_ready{condition="true"} == 0
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Pod {{ $labels.pod }} not ready"
+        description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has been not ready for 15m"
+    
+    # OOMKilled
+    - alert: PodOOMKilled
+      expr: |
+        kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1
+      for: 0m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Pod {{ $labels.pod }} OOMKilled"
+        description: "Pod {{ $labels.pod }} was killed due to out of memory"
+    
+    # 高重启率
+    - alert: PodHighRestartRate
+      expr: rate(kube_pod_container_status_restarts_total[1h]) > 0.1
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Pod {{ $labels.pod }} high restart rate"
+        description: "Pod is restarting more than 0.1 times per minute"
+
+---
+# Deployment 级别告警
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: deployment-alerts
+  namespace: monitoring
+spec:
+  groups:
+  - name: deployment
+    rules:
+    # 可用副本不足
+    - alert: DeploymentReplicasMismatch
+      expr: |
+        kube_deployment_status_replicas_available
+        !=
+        kube_deployment_spec_replicas
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Deployment {{ $labels.deployment }} replica mismatch"
+        description: "Deployment has less available replicas than desired"
+    
+    # HPA 达到最大副本
+    - alert: HPAMaxReplicasReached
+      expr: |
+        kube_horizontalpodautoscaler_status_current_replicas
+        >=
+        kube_horizontalpodautoscaler_spec_max_replicas
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "HPA {{ $labels.horizontalpodautoscaler }} maxed out"
+        description: "HPA has been at max replicas for 15 minutes"
+    
+    # VPA 建议与当前配置差异大
+    - alert: VPARecommendationMismatch
+      expr: |
+        vpa_container_recommendation{resource="memory"} / vpa_container_current{resource="memory"} > 1.5
+        or
+        vpa_container_recommendation{resource="cpu"} / vpa_container_current{resource="cpu"} > 1.5
+      for: 1h
+      labels:
+        severity: info
+      annotations:
+        summary: "VPA recommends larger resources for {{ $labels.container }}"
+        description: "VPA recommendation is significantly higher than current resources"
+
+---
+# API Server 告警
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: apiserver-alerts
+  namespace: monitoring
+spec:
+  groups:
+  - name: apiserver
+    rules:
+    # API Server 不可用
+    - alert: APIServerDown
+      expr: up{job="apiserver"} == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "API Server is down"
+        description: "API Server has been down for more than 5 minutes"
+    
+    # 高错误率
+    - alert: APIServerHighErrorRate
+      expr: |
+        sum(rate(apiserver_request_total{code=~"5.."}[5m]))
+        /
+        sum(rate(apiserver_request_total[5m])) > 0.05
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "API Server high error rate"
+        description: "API Server error rate is above 5%"
+    
+    # 高延迟
+    - alert: APIServerHighLatency
+      expr: |
+        histogram_quantile(0.99, sum(rate(apiserver_request_duration_seconds_bucket[5m])) by (le, verb))
+        > 1
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "API Server high latency"
+        description: "99th percentile latency is above 1s for {{ $labels.verb }} requests"
+    
+    # etcd 备份延迟
+    - alert: EtcdBackupFailed
+      expr: time() - etcd_backup_last_success_timestamp > 86400
+      for: 1h
+      labels:
+        severity: critical
+      annotations:
+        summary: "etcd backup is stale"
+        description: "Last successful etcd backup was more than 24 hours ago"
+
+---
+# 应用级别告警 (通用)
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: application-alerts
+  namespace: monitoring
+spec:
+  groups:
+  - name: application
+    rules:
+    # HTTP 错误率高
+    - alert: HighErrorRate
+      expr: |
+        sum(rate(http_requests_total{status=~"5.."}[5m]))
+        /
+        sum(rate(http_requests_total[5m])) > 0.05
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "High error rate detected"
+        description: "Error rate is above 5% for {{ $labels.service }}"
+    
+    # P99 延迟高
+    - alert: HighLatency
+      expr: |
+        histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))
+        > 0.5
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High latency detected"
+        description: "P99 latency is above 500ms"
+    
+    # 请求量突降
+    - alert: RequestDrop
+      expr: |
+        (
+          sum(rate(http_requests_total[5m]))
+          <
+          0.5 * avg_over_time(sum(rate(http_requests_total[1h]))[1d:1h])
+        )
+        and
+        (
+          sum(rate(http_requests_total[5m])) > 0
+        )
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Request volume dropped significantly"
+        description: "Request volume is 50% lower than daily average"
+
+---
+# 证书告警
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: certificate-alerts
+  namespace: monitoring
+spec:
+  groups:
+  - name: certificates
+    rules:
+    # 证书即将过期
+    - alert: CertificateExpiringSoon
+      expr: |
+        (
+          (certmanager_certificate_expiration_timestamp_seconds - time()) / 86400
+        ) < 30
+      for: 1h
+      labels:
+        severity: warning
+      annotations:
+        summary: "Certificate {{ $labels.name }} expiring soon"
+        description: "Certificate will expire in less than 30 days"
+    
+    # 证书已过期
+    - alert: CertificateExpired
+      expr: |
+        certmanager_certificate_expiration_timestamp_seconds < time()
+      for: 1h
+      labels:
+        severity: critical
+      annotations:
+        summary: "Certificate {{ $labels.name }} has expired"
+        description: "Certificate expired on {{ $value | humanizeTimestamp }}"

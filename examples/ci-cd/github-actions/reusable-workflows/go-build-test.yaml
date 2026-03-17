@@ -1,0 +1,109 @@
+# 可复用工作流 - Go 应用构建与测试
+# 使用方法:
+#   uses: ./.github/workflows/go-build-test.yaml
+#   with:
+#     go-version: '1.23'
+#     working-directory: './src'
+
+name: Go Build and Test
+
+on:
+  workflow_call:
+    inputs:
+      go-version:
+        description: 'Go version'
+        type: string
+        default: '1.23'
+      working-directory:
+        description: 'Working directory'
+        type: string
+        default: '.'
+      run-lint:
+        description: 'Run linting'
+        type: boolean
+        default: true
+      run-tests:
+        description: 'Run tests'
+        type: boolean
+        default: true
+      run-coverage:
+        description: 'Generate coverage report'
+        type: boolean
+        default: true
+      coverage-threshold:
+        description: 'Minimum coverage threshold'
+        type: number
+        default: 70
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ inputs.go-version }}
+        cache: true
+        cache-dependency-path: ${{ inputs.working-directory }}/go.sum
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Verify dependencies
+      run: go mod verify
+
+    - name: Run go vet
+      run: go vet ./...
+
+    - name: Run linting
+      if: inputs.run-lint
+      uses: golangci/golangci-lint-action@v6
+      with:
+        version: latest
+        working-directory: ${{ inputs.working-directory }}
+        args: --timeout=5m
+
+    - name: Build
+      run: go build -v ./...
+
+    - name: Run tests
+      if: inputs.run-tests
+      run: go test -v ./...
+
+    - name: Run tests with coverage
+      if: inputs.run-coverage
+      run: |
+        go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+        go tool cover -html=coverage.out -o coverage.html
+
+    - name: Check coverage threshold
+      if: inputs.run-coverage
+      run: |
+        COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+        echo "Total coverage: $COVERAGE%"
+        if (( $(echo "$COVERAGE < ${{ inputs.coverage-threshold }}" | bc -l) )); then
+          echo "Coverage $COVERAGE% is below threshold ${{ inputs.coverage-threshold }}%"
+          exit 1
+        fi
+
+    - name: Upload coverage report
+      if: inputs.run-coverage && always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: ${{ inputs.working-directory }}/coverage.html
+
+    - name: Upload coverage to Codecov
+      if: inputs.run-coverage && always()
+      uses: codecov/codecov-action@v4
+      with:
+        files: ${{ inputs.working-directory }}/coverage.out
+        flags: unittests
+        name: codecov-umbrella

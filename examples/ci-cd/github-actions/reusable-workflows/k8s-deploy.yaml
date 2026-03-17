@@ -1,0 +1,215 @@
+# 可复用工作流 - Kubernetes 部署
+# 使用方法:
+#   uses: ./.github/workflows/k8s-deploy.yaml
+#   with:
+#     environment: production
+#     manifests: k8s/
+
+name: Kubernetes Deploy
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        type: string
+        required: true
+      manifests:
+        description: 'Path to Kubernetes manifests'
+        type: string
+        default: 'k8s/'
+      namespace:
+        description: 'Target namespace'
+        type: string
+        required: true
+      image:
+        description: 'Image to deploy'
+        type: string
+        required: true
+      tag:
+        description: 'Image tag'
+        type: string
+        required: true
+      strategy:
+        description: 'Deployment strategy (rolling/recreate/canary)'
+        type: string
+        default: 'rolling'
+      validate:
+        description: 'Run pre-deployment validation'
+        type: boolean
+        default: true
+      dry-run:
+        description: 'Run in dry-run mode'
+        type: boolean
+        default: false
+      timeout:
+        description: 'Deployment timeout (seconds)'
+        type: number
+        default: 300
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v4
+      with:
+        version: 'v1.33.0'
+
+    - name: Setup Kustomize
+      uses: imranismail/setup-kustomize@v2
+      with:
+        kustomize-version: 'v5.4.0'
+
+    - name: Setup Helm
+      uses: azure/setup-helm@v4
+      with:
+        version: 'v3.15.0'
+
+    - name: Configure kubeconfig
+      run: |
+        echo "${{ secrets.KUBECONFIG }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
+        kubectl cluster-info
+        kubectl get nodes
+
+    - name: Validate manifests
+      if: inputs.validate
+      run: |
+        # Validate YAML syntax
+        find ${{ inputs.manifests }} -name "*.yaml" -o -name "*.yml" | while read file; do
+          echo "Validating $file"
+          kubectl apply --dry-run=client -f "$file"
+        done
+        
+        # Run kubeconform if available
+        if command -v kubeconform &> /dev/null; then
+          kubeconform -strict -ignore-missing-schemas ${{ inputs.manifests }}
+        fi
+        
+        # Run kube-score
+        if command -v kube-score &> /dev/null; then
+          kube-score score ${{ inputs.manifests }}/*.yaml
+        fi
+
+    - name: Dry run
+      if: inputs.dry-run
+      run: |
+        export KUBECONFIG=kubeconfig
+        kubectl apply -k ${{ inputs.manifests }} --dry-run=server
+
+    - name: Deploy with Kustomize
+      if: ${{ !inputs.dry-run && inputs.strategy != 'canary' }}
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # Update image tag in kustomization
+        cd ${{ inputs.manifests }}
+        kustomize edit set image app=${{ inputs.image }}:${{ inputs.tag }}
+        
+        # Apply
+        kustomize build . | kubectl apply -f -
+
+    - name: Deploy with Helm
+      if: ${{ !inputs.dry-run && contains(inputs.manifests, 'Chart.yaml') }}
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        helm upgrade --install ${{ inputs.environment }} ${{ inputs.manifests }} \
+          --namespace ${{ inputs.namespace }} \
+          --set image.repository=${{ inputs.image }} \
+          --set image.tag=${{ inputs.tag }} \
+          --timeout ${{ inputs.timeout }}s \
+          --wait \
+          --atomic
+
+    - name: Canary Deployment
+      if: ${{ !inputs.dry-run && inputs.strategy == 'canary' }}
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # Initial canary deployment (10% traffic)
+        kubectl set image deployment/app-canary app=${{ inputs.image }}:${{ inputs.tag }} -n ${{ inputs.namespace }}
+        kubectl scale deployment/app-canary --replicas=1 -n ${{ inputs.namespace }}
+        
+        # Wait and analyze
+        sleep 60
+        
+        # Check error rate
+        ERROR_RATE=$(kubectl exec -n monitoring deploy/prometheus -- curl -s 'http://prometheus:9090/api/v1/query?query=sum(rate(http_requests_total{namespace="${{ inputs.namespace }}",status=~"5.."}[1m]))/sum(rate(http_requests_total{namespace="${{ inputs.namespace }}"}[1m]))' | jq -r '.data.result[0].value[1] // "0"')
+        
+        if (( $(echo "$ERROR_RATE > 0.01" | bc -l) )); then
+          echo "Canary failed - error rate too high: $ERROR_RATE"
+          kubectl rollout undo deployment/app-canary -n ${{ inputs.namespace }}
+          exit 1
+        fi
+        
+        # Promote to full deployment
+        kubectl set image deployment/app app=${{ inputs.image }}:${{ inputs.tag }} -n ${{ inputs.namespace }}
+        kubectl rollout status deployment/app -n ${{ inputs.namespace }} --timeout=${{ inputs.timeout }}s
+
+    - name: Wait for rollout
+      if: ${{ !inputs.dry-run }}
+      run: |
+        export KUBECONFIG=kubeconfig
+        kubectl rollout status deployment/app -n ${{ inputs.namespace }} --timeout=${{ inputs.timeout }}s
+
+    - name: Verify deployment
+      if: ${{ !inputs.dry-run }}
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # Check pod status
+        kubectl get pods -n ${{ inputs.namespace }} -l app=app
+        
+        # Check service endpoints
+        kubectl get endpoints -n ${{ inputs.namespace }}
+        
+        # Run smoke tests
+        kubectl run smoke-test --rm -i --restart=Never --image=curlimages/curl -- \
+          curl -sf http://app.${{ inputs.namespace }}.svc.cluster.local/health
+
+    - name: Notify success
+      if: success()
+      run: |
+        curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+          -H 'Content-Type: application/json' \
+          -d '{
+            "text": "✅ Deployment successful",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*Deployment Successful*\n• Environment: ${{ inputs.environment }}\n• Image: ${{ inputs.image }}:${{ inputs.tag }}\n• Namespace: ${{ inputs.namespace }}"
+                }
+              }
+            ]
+          }'
+
+    - name: Notify failure
+      if: failure()
+      run: |
+        curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+          -H 'Content-Type: application/json' \
+          -d '{
+            "text": "❌ Deployment failed",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*Deployment Failed*\n• Environment: ${{ inputs.environment }}\n• Image: ${{ inputs.image }}:${{ inputs.tag }}\n• Check logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                }
+              }
+            ]
+          }'
+
+    - name: Cleanup
+      if: always()
+      run: rm -f kubeconfig
